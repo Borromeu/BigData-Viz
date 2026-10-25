@@ -1,2 +1,13 @@
-.venv
-.venv-tools
+.venv/
+.venv-tools/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.env
+.DS_Store
+
+data/*
+!data/.gitkeep
+
+results/*
+!results/.gitkeep
