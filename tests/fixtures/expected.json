@@ -1,0 +1,103 @@
+{
+  "config_version": "1",
+  "filter_version": "1",
+  "dataset_id": "fixture_jan",
+  "quality": {
+    "raw_count": 20,
+    "eligible_count": 12,
+    "eligible_fixture_ids": [
+      1, 2, 3, 4, 5, 6,
+      7, 8, 9, 10, 11, 12
+    ],
+    "excluded_fixture_ids": {
+      "missing_timestamp": [13],
+      "outside_period": [14, 15],
+      "missing_or_nonfinite_distance": [16, 19, 20],
+      "nonpositive_distance": [17, 18]
+    }
+  },
+  "exact": {
+    "hours": {
+      "00": 2,
+      "01": 3,
+      "02": 0,
+      "03": 0,
+      "04": 0,
+      "05": 0,
+      "06": 0,
+      "07": 0,
+      "08": 3,
+      "09": 0,
+      "10": 0,
+      "11": 0,
+      "12": 2,
+      "13": 0,
+      "14": 0,
+      "15": 0,
+      "16": 0,
+      "17": 0,
+      "18": 1,
+      "19": 0,
+      "20": 0,
+      "21": 0,
+      "22": 0,
+      "23": 1
+    },
+    "distance": {
+      "0": 1,
+      "1": 2,
+      "2": 3,
+      "3": 3,
+      "4": 3
+    },
+    "zones": {
+      "0": 1,
+      "1": 4,
+      "2": 3,
+      "3": 3,
+      "99": 1
+    },
+    "ranked_zone_ids": ["1", "2", "3", "0", "99"]
+  },
+  "manual_sample": {
+    "fixture_ids": [1, 3, 6, 9],
+    "sample_rate": 0.3333333333333333,
+    "raw_count": 4,
+    "estimated_total": 12,
+    "raw_hours_nonzero": {
+      "00": 1,
+      "01": 1,
+      "08": 1,
+      "12": 1
+    },
+    "estimated_hours_nonzero": {
+      "00": 3,
+      "01": 3,
+      "08": 3,
+      "12": 3
+    },
+    "raw_distance": {
+      "0": 1,
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 0
+    },
+    "estimated_distance": {
+      "0": 3,
+      "1": 3,
+      "2": 3,
+      "3": 3,
+      "4": 0
+    },
+    "estimated_zones": {
+      "0": 0,
+      "1": 6,
+      "2": 3,
+      "3": 3,
+      "99": 0
+    },
+    "hours_normalized_absolute_error": 0.3333333333333333,
+    "distance_total_variation": 0.25
+  }
+}
