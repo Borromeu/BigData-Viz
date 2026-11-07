@@ -81,3 +81,67 @@ Fiecare rulare înregistrează CONFIG_VERSION și FILTER_VERSION
 Orice schimbare se face prin PR cu aprobarea altui membru.
 Schimbarea filtrelor invalidează eșantioanele și rezultatele
 obținute cu filtrul anterior.
+
+## Organizarea și executarea SQL-ului
+
+Interogările SQL ale aplicației se păstrează în fișiere `.sql`
+din `src/sql/`, versionate împreună cu restul codului.
+
+Python răspunde de:
+- validarea parametrilor și a surselor;
+- încărcarea fișierelor SQL;
+- executarea interogărilor;
+- prelucrarea și exportarea rezultatelor.
+
+### Structură
+
+src/
+├── queries.py
+├── data.py
+├── sampling.py
+└── sql/
+    ├── hours.sql
+    ├── distance.sql
+    └── ...
+
+Fiecare fișier SQL are un scop clar. Agregările comune sunt
+reutilizate pentru exact și sample, fără duplicarea SQL-ului.
+
+### Reguli
+
+1. Interogările aplicației nu sunt definite în stringuri SQL
+   în fișierele Python sau în notebookuri.
+
+2. Fișierele SQL se selectează printr-o mapare internă.
+   Nu acceptăm căi arbitrare furnizate de utilizator.
+
+3. Valorile dinamice se transmit prin parametri SQL.
+   Nu se introduc prin f-string, concatenare sau `.format()`.
+
+4. Identificatorii dinamici, precum numele surselor, provin
+   exclusiv din mapări interne cu opțiuni permise.
+   Opțiunile necunoscute produc ValueError înainte de execuție.
+
+5. Căile către fișierele SQL sunt construite pornind de la
+   locația modulului, fără dependență de directorul curent.
+
+6. Pentru benchmark, încărcarea șabloanelor SQL se face înainte
+   de pornirea cronometrului. Măsurarea include execuția
+   interogării și obținerea rezultatului agregat.
+
+7. Schimbarea unui fișier SQL necesită verificarea testelor
+   funcționale afectate și review de la alt membru.
+
+### Excepții limitate
+
+Instrucțiunile scurte pentru configurarea conexiunii și SQL-ul
+folosit exclusiv la pregătirea datelor sintetice în teste pot
+rămâne în Python.
+
+Excepțiile nu permit duplicarea interogărilor aplicației în teste.
+
+### Securitate
+
+Separarea în fișiere `.sql` este o regulă de organizare.
+Protecția împotriva SQL injection este asigurată prin
+parametrizarea valorilor și controlul identificatorilor.
