@@ -49,7 +49,7 @@ class ConfigTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     config.validate_sample_rate(value)
 
-        # Folosit inclusiv pentru testul de identitate exact–sample.
+        # Used by the exact-versus-sample identity check.
         config.validate_sample_rate(1)
 
     def test_invalid_seeds_are_rejected(self):
@@ -104,15 +104,20 @@ class ConfigTests(unittest.TestCase):
 
         try:
             with tempfile.TemporaryDirectory() as directory:
-                os.chdir(directory)
-                importlib.reload(config)
+                try:
+                    os.chdir(directory)
+                    importlib.reload(config)
 
-                self.assertEqual(config.PROJECT_ROOT, expected_root)
-                self.assertTrue(config.RAW_DIR.is_absolute())
-                self.assertEqual(
-                    config.get_dataset("jan").files[0].parent,
-                    expected_root / "data" / "raw",
-                )
+                    self.assertEqual(config.PROJECT_ROOT, expected_root)
+                    self.assertTrue(config.RAW_DIR.is_absolute())
+                    self.assertEqual(
+                        config.get_dataset("jan").files[0].parent,
+                        expected_root / "data" / "raw",
+                    )
+                finally:
+                    # Windows cannot remove the current working directory.
+                    os.chdir(original_directory)
+            importlib.reload(config)
         finally:
             os.chdir(original_directory)
             importlib.reload(config)
