@@ -10,7 +10,10 @@ categorized AS (
         WHEN distance_miles >= 10 THEN 4
         ELSE -1 END AS dist_bin
     FROM {table_name}
-    WHERE {ELIGIBLE_FILTER}
+    WHERE pickup_at IS NOT NULL
+      AND distance_miles IS NOT NULL
+      AND distance_miles > 0
+      AND NOT (isnan(distance_miles) OR isinf(distance_miles))
 ),
 aggregated AS (
     SELECT dist_bin, COUNT(*) AS trip_count

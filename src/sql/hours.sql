@@ -4,7 +4,10 @@ WITH hours AS (
 actual_trips AS (
     SELECT EXTRACT(HOUR FROM pickup_at) AS hour, COUNT(*) AS trip_count
     FROM {table_name}
-    WHERE {ELIGIBLE_FILTER}
+    WHERE pickup_at IS NOT NULL
+      AND distance_miles IS NOT NULL
+      AND distance_miles > 0
+      AND NOT (isnan(distance_miles) OR isinf(distance_miles))
     GROUP BY 1
 )
 SELECT LPAD(CAST(h.hour AS VARCHAR), 2, '0') AS group_key,
