@@ -1,64 +1,98 @@
-import sys
-import os
+import unittest
+from pathlib import Path
+
 import duckdb
-import json
-import pandas as pd
 
-# Adăugăm folderul src în Calea Python ca să găsească modulele
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+from src.metrics import calculate_distance_total_variation, calculate_hours_error
+from src.queries import query_counts
+from src.sampling import estimate_counts
 
-from queries import get_trips_by_hour, get_distance_distribution
-from metrics import calculate_hours_error, calculate_distance_total_variation
+
+class QueryTests(unittest.TestCase):
+    def setUp(self):
+        self.conn = duckdb.connect()
+        fixture = (Path(__file__).parent / "fixtures" / "trips.csv").as_posix()
+        self.conn.execute(f"""
+            CREATE TABLE trips AS
+            SELECT tpep_pickup_datetime AS pickup_at,
+                   trip_distance AS distance_miles,
+                   PULocationID AS pickup_zone, fixture_id
+            FROM read_csv_auto('{fixture}')
+            WHERE fixture_id BETWEEN 1 AND 12 OR fixture_id BETWEEN 16 AND 20
+        """)
+        self.conn.execute("CREATE TABLE sample_trips AS SELECT * FROM trips WHERE fixture_id IN (1, 3, 6, 9)")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_query_counts_hours_for_both_sources(self):
+        for source, expected in (("trips", 12), ("sample_trips", 4)):
+            with self.subTest(source=source):
+                rows = query_counts(self.conn, "hours", source).df()
+                self.assertEqual(len(rows), 24)
+                self.assertEqual(int(rows.value.sum()), expected)
+                self.assertTrue(all(isinstance(v, int) for v in rows.value))
+
+    def test_query_counts_distance_for_both_sources(self):
+        exact = query_counts(self.conn, "distance", "trips").df()
+        sampled = query_counts(self.conn, "distance", "sample_trips").df()
+        self.assertEqual(list(exact.group_key), ["0", "1", "2", "3", "4"])
+        self.assertEqual(list(exact.value), [1, 2, 3, 3, 3])
+        self.assertEqual(int(sampled.value.sum()), 4)
+
+    def test_identical_exact_results_have_zero_metric_error(self):
+        hours = query_counts(self.conn, "hours", "trips").df()
+        distance = query_counts(self.conn, "distance", "trips").df()
+        self.assertEqual(calculate_hours_error(hours, hours), 0.0)
+        self.assertEqual(calculate_distance_total_variation(distance, distance), 0.0)
+
+    def test_invalid_source_fails_before_sql(self):
+        self.conn.close()
+        with self.assertRaises(ValueError):
+            query_counts(self.conn, "hours", "malicious_table")
+
+    def test_empty_views_return_all_categories(self):
+        self.conn.execute("CREATE TABLE empty_trips AS SELECT * FROM trips WHERE false")
+        hours = query_counts(self.conn, "hours", "trips").df()
+        # Explicitly query an allowed source that points at an empty view.
+        self.conn.execute("DROP TABLE sample_trips")
+        self.conn.execute("CREATE VIEW sample_trips AS SELECT * FROM empty_trips")
+        hours = query_counts(self.conn, "hours", "sample_trips").df()
+        distance = query_counts(self.conn, "distance", "sample_trips").df()
+        self.assertEqual(len(hours), 24)
+        self.assertEqual(int(hours.value.sum()), 0)
+        self.assertEqual(list(distance.value), [0, 0, 0, 0, 0])
+
+    def test_weighting_occurs_once_after_raw_sql_counts(self):
+        raw = query_counts(self.conn, "distance", "sample_trips").df()
+        self.assertEqual(list(raw.value), [1, 1, 1, 1, 0])
+        estimated = estimate_counts(raw, 1 / 3)
+        self.assertEqual(list(estimated.value), [3, 3, 3, 3, 0])
+        self.assertEqual(float(estimated.value.sum()), 12)
+
+    def test_probability_validation(self):
+        for p in (0, -0.1, 1.01, float("nan"), float("inf"), True, "0.1"):
+            with self.subTest(p=p), self.assertRaises(ValueError):
+                estimate_counts([1], p)
+
+    def test_distance_boundaries_are_explicit(self):
+        self.conn.execute("""
+            CREATE TABLE boundary_trips AS
+            SELECT TIMESTAMP '2025-01-01 00:00:00' AS pickup_at,
+                   d::DOUBLE AS distance_miles, 1 AS pickup_zone
+            FROM (VALUES (0.5), (1), (2), (5), (10)) t(d)
+        """)
+        self.conn.execute("DROP TABLE sample_trips")
+        self.conn.execute("CREATE TABLE sample_trips AS SELECT * FROM boundary_trips")
+        result = query_counts(self.conn, "distance", "sample_trips").df()
+        self.assertEqual(list(result.value), [1, 1, 1, 1, 1])
+
+    def test_hourly_and_distance_queries_share_eligible_population(self):
+        hours = query_counts(self.conn, "hours", "trips").df()
+        distance = query_counts(self.conn, "distance", "trips").df()
+        self.assertEqual(int(hours.value.sum()), 12)
+        self.assertEqual(int(distance.value.sum()), 12)
+
 
 if __name__ == "__main__":
-    conn = duckdb.connect()
-
-    # 1. Încărcăm datele complete (populația eligibilă: fixture_id 1-12)
-    # Atenție: Calea către CSV este relativă la directorul de unde rulezi comanda (rădăcina proiectului)
-    conn.execute("""
-        CREATE TABLE trips AS 
-        SELECT * FROM read_csv_auto('tests/fixtures/trips.csv')
-        WHERE fixture_id BETWEEN 1 AND 12;
-    """)
-
-    # Obținem datele exacte
-    exact_hours = get_trips_by_hour(conn, "trips", sample_rate=1.0).df()
-    exact_dist = get_distance_distribution(conn, "trips", sample_rate=1.0).df()
-
-    # --- A. Test fidelitate pe date identice ---
-    err_hours_self = calculate_hours_error(exact_hours, exact_hours)
-    err_dist_self = calculate_distance_total_variation(exact_dist, exact_dist)
-    
-    print("=== Test O4: Fidelitate pe date identice ===")
-    print(f"Eroare ore (identic): {err_hours_self} (Așteptat: 0.0)")
-    print(f"Eroare distanțe (identic): {err_dist_self} (Așteptat: 0.0)")
-    assert err_hours_self == 0.0 and err_dist_self == 0.0, "Eroare la testul de fidelitate!"
-
-    # --- B. Test eșantion manual vs expected.json ---
-    conn.execute("""
-        CREATE TABLE sample_trips AS 
-        SELECT * FROM read_csv_auto('tests/fixtures/trips.csv')
-        WHERE fixture_id IN (1, 3, 6, 9);
-    """)
-
-    sample_rate = 1.0 / 3.0
-    est_hours = get_trips_by_hour(conn, "sample_trips", sample_rate=sample_rate).df()
-    est_dist = get_distance_distribution(conn, "sample_trips", sample_rate=sample_rate).df()
-
-    calc_hours_err = calculate_hours_error(exact_hours, est_hours)
-    calc_dist_tv = calculate_distance_total_variation(exact_dist, est_dist)
-
-    with open('tests/fixtures/expected.json', 'r') as f:
-        expected = json.load(f)
-
-    exp_hours_err = expected['manual_sample']['hours_normalized_absolute_error']
-    exp_dist_tv = expected['manual_sample']['distance_total_variation']
-
-    print("\n=== Test O4: Eșantion manual vs Expected.json ===")
-    print(f"Eroare oră calculată: {calc_hours_err} | Așteptat: {exp_hours_err}")
-    print(f"Distanță TV calculată: {calc_dist_tv} | Așteptat: {exp_dist_tv}")
-
-    assert abs(calc_hours_err - exp_hours_err) < 1e-9, "Eroarea la ore nu corespunde cu expected.json!"
-    assert abs(calc_dist_tv - exp_dist_tv) < 1e-9, "Distanța TV nu corespunde cu expected.json!"
-    
-    print("\n🎉 Toate testele din O4 au trecut cu succes și se potrivesc perfect cu expected.json!")
+    unittest.main()

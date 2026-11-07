@@ -1,54 +1,81 @@
-import sys
-import os
-import duckdb
+import unittest
+
 import pandas as pd
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
-from queries import get_trips_by_hour, get_distance_distribution
+from src.metrics import (
+    calculate_distance_total_variation,
+    calculate_hours_error,
+    evaluate,
+)
+
+
+def frame(keys, values):
+    return pd.DataFrame({"group_key": keys, "value": values})
+
+
+class MetricEdgeCaseTests(unittest.TestCase):
+    def test_manual_hourly_error_is_one_third(self):
+        exact = frame(["00", "01", "08", "12", "18", "23"], [2, 3, 3, 2, 1, 1])
+        estimate = frame(["00", "01", "08", "12", "18", "23"], [3, 3, 3, 3, 0, 0])
+        self.assertAlmostEqual(calculate_hours_error(exact, estimate), 1 / 3)
+
+    def test_manual_tvd_is_one_quarter(self):
+        exact = frame(["0", "1", "2", "3", "4"], [1, 2, 3, 3, 3])
+        estimated = frame(["0", "1", "2", "3", "4"], [3, 3, 3, 3, 0])
+        self.assertAlmostEqual(calculate_distance_total_variation(exact, estimated), 0.25)
+
+    def test_missing_categories_are_zero_filled_by_outer_merge(self):
+        exact = frame(["a", "b"], [1, 1])
+        estimate = frame(["a"], [1])
+        self.assertAlmostEqual(calculate_hours_error(exact, estimate), 0.5)
+
+    def test_tvd_zero_total_statuses(self):
+        exact = frame(["a"], [2])
+        empty = frame(["a"], [0])
+        result = calculate_distance_total_variation(exact, empty, with_status=True)
+        self.assertEqual((result.status, result.value), ("empty_sample", None))
+        result = calculate_distance_total_variation(empty, empty, with_status=True)
+        self.assertEqual((result.status, result.value), ("not_applicable", None))
+
+    def test_hour_zero_total_statuses(self):
+        exact = frame(["a"], [2])
+        empty = frame(["a"], [0])
+        result = calculate_hours_error(exact, empty, with_status=True)
+        self.assertEqual((result.status, result.value), ("empty_sample", 1.0))
+        result = calculate_hours_error(empty, empty, with_status=True)
+        self.assertEqual((result.status, result.value), ("not_applicable", None))
+
+    def test_nan_negative_duplicate_and_missing_column_inputs_rejected(self):
+        cases = (
+            frame(["a"], [float("nan")]),
+            frame(["a"], [float("inf")]),
+            frame(["a"], [-1]),
+            frame(["a"], ["1"]),
+            frame(["a", "a"], [1, 2]),
+            pd.DataFrame({"group_key": ["a"]}),
+        )
+        valid = frame(["a"], [1])
+        for invalid in cases:
+            with self.subTest(invalid=invalid.to_dict()), self.assertRaises((ValueError, TypeError)):
+                calculate_hours_error(invalid, valid)
+
+    def test_null_keys_and_incompatible_key_formats_rejected(self):
+        valid = frame(["a"], [1])
+        for invalid in (frame([None], [1]), frame([1], [1])):
+            with self.subTest(invalid=invalid.to_dict()), self.assertRaises(ValueError):
+                calculate_hours_error(valid, invalid)
+
+    def test_evaluate_preserves_metric_status_for_export(self):
+        rows = [("a", 2)]
+        self.assertEqual(evaluate(rows, [("a", 0)], "distance"),
+                         {"status": "empty_sample", "value": None})
+
+    def test_category_order_invariance(self):
+        exact = frame(["a", "b", "c"], [2, 3, 5])
+        estimated = frame(["c", "a", "b"], [5, 2, 3])
+        self.assertEqual(calculate_hours_error(exact, estimated), 0.0)
+        self.assertEqual(calculate_distance_total_variation(exact, estimated), 0.0)
+
 
 if __name__ == "__main__":
-    conn = duckdb.connect()
-
-    # Creăm un set de date artificial special pentru cazuri-limită (edge cases)
-    # Conține: o valoare la limită (1.0), valori invalide (negativ, 0, inf, NaN) și ore izolate
-    conn.execute("""
-        CREATE TABLE edge_trips (
-            fixture_id INTEGER,
-            tpep_pickup_datetime TIMESTAMP,
-            trip_distance DOUBLE,
-            PULocationID INTEGER
-        );
-    """)
-
-    # Inserăm date de test controlate
-    conn.execute("""
-        INSERT INTO edge_trips VALUES
-        (1, '2025-01-15 00:30:00', 0.5, 1),  -- Ora 00, Bin 0 (0<d<1)
-        (2, '2025-01-15 01:00:00', 1.0, 1),  -- Ora 01, Bin 1 (exact la limită: 1.0)
-        (3, '2025-01-15 01:15:00', -1.0, 1), -- Distanță negativă (trebuie filtrată)
-        (4, '2025-01-15 01:30:00', 'NaN', 1),-- Distanță NaN (trebuie filtrată)
-        (5, '2025-01-15 23:45:00', 15.0, 2)  -- Ora 23, Bin 4 (>=10)
-    """)
-
-    print("=== Test O6: Verificare categorii absente (completate cu zero) și cazuri-limită ===")
-
-    # 1. Verificăm că toate cele 24 de ore sunt prezente (chiar dacă majoritatea au 0 curse)
-    hours_df = get_trips_by_hour(conn, "edge_trips", sample_rate=1.0).df()
-    assert len(hours_df) == 24, "Trebuie să avem exact 24 de rânduri pentru ore (00-23)!"
-    
-    # Verificăm că ora 02 are valoarea 0.0 (categorie absentă completată cu zero)
-    val_hour_2 = hours_df.loc[hours_df["group_key"] == "02", "value"].values[0]
-    print(f"Valoarea pentru ora '02' (absentă în date): {val_hour_2} (Așteptat: 0.0)")
-    assert val_hour_2 == 0.0
-
-    # 2. Verificăm distribuția distanțelor pentru cazurile-limită
-    dist_df = get_distance_distribution(conn, "edge_trips", sample_rate=1.0).df()
-    print("\nDistribuția distanțelor pe datele de test limită:")
-    print(dist_df)
-
-    # Bin 1 trebuie să conțină valoarea 1.0 (exact la limită)
-    val_bin_1 = dist_df.loc[dist_df["group_key"] == "1", "value"].values[0]
-    print(f"Valoarea pentru Bin 1 (distanța 1.0): {val_bin_1} (Așteptat: 1.0)")
-    assert val_bin_1 == 1.0
-
-    print("\n🎉 Toate testele pentru O6 (cazuri-limită și categorii absente) au trecut cu succes!")
+    unittest.main()
