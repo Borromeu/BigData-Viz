@@ -9,7 +9,6 @@ import pandas as pd
 
 
 def _validate_probability(p):
-    """Validează dacă probabilitatea p este un număr real în intervalul (0, 1]."""
     if isinstance(p, bool) or not isinstance(p, numbers.Real):
         raise ValueError("p must be a finite number in (0, 1].")
     if not math.isfinite(float(p)) or not 0 < p <= 1:
@@ -17,7 +16,6 @@ def _validate_probability(p):
 
 
 def estimate_counts(counts, p):
-    """Task S2: Aplică ponderarea 1/p asupra rezultatelor numărate."""
     _validate_probability(p)
     if isinstance(counts, pd.DataFrame):
         if "value" not in counts.columns:
@@ -34,7 +32,6 @@ def estimate_counts(counts, p):
 
 
 def _estimate_value(value, p):
-    """Scalare individuală pentru o valoare numerică."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise ValueError("counts must be numeric.")
     value = float(value)
@@ -44,10 +41,8 @@ def _estimate_value(value, p):
 
 
 def build_sample_view(con, source_view="trips", sample_rate=0.10, seed=42):
-    """Task S1: Creează o vedere temporară eșantionată Bernoulli cu seed fix."""
     _validate_probability(sample_rate)
 
-    # Setare critică pentru reproductibilitate pe un singur thread în DuckDB
     con.execute("SET threads = 1;")
 
     query = f"""
@@ -59,21 +54,16 @@ def build_sample_view(con, source_view="trips", sample_rate=0.10, seed=42):
 
 
 def sample_and_query(con, question="hours", sample_rate=0.10, seed=42, source_view="trips"):
-    """Task S3: Execută eșantionarea, interogarea comună și ponderarea 1/p."""
     from src.queries import query_counts
 
-    # 1. Creează vederea eșantionată Bernoulli (Task S1)
     build_sample_view(con, source_view=source_view, sample_rate=sample_rate, seed=seed)
 
-    # 2. Rulează interogarea SQL peste eșantion
     raw_counts = query_counts(con, question=question, source="sample_trips")
 
-    # 3. Aplică estimatorul 1/p peste rezultate (Task S2)
     return estimate_counts(raw_counts, p=sample_rate)
 
 
 def build_sample(con, sample_rate=0.10, seed=42, output_path=None, source_view="trips"):
-    """Task S4 & S5: Construiește eșantionul Parquet, salvează metadatele și măsoară timpul."""
     _validate_probability(sample_rate)
     start_time = time.perf_counter()
 
@@ -90,3 +80,15 @@ def build_sample(con, sample_rate=0.10, seed=42, output_path=None, source_view="
 
     build_seconds = time.perf_counter() - start_time
     return build_seconds
+def main():
+    parser = argparse.ArgumentParser(description="Generare eșantioane Bernoulli DuckDB")
+    parser.add_argument("--stage", choices=["pilot", "final"], default="pilot", help="Etapa proiectului")
+    parser.add_argument("--dataset", choices=["jan", "q1", "all"], default="jan", help="Setul de date")
+    args = parser.parse_args()
+
+    print(f"[Sampling CLI] Etapa: {args.stage} | Dataset: {args.dataset}")
+    print("[Sampling CLI] Modulul de eșantionare este pregătit pentru generarea fișierelor Parquet.")
+
+
+if __name__ == "__main__":
+    main()
