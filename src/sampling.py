@@ -1,37 +1,59 @@
-import math
-import numbers
+﻿from __future__ import annotations
 
-import pandas as pd
+import duckdb
 
-
-def _validate_probability(p):
-    if isinstance(p, bool) or not isinstance(p, numbers.Real):
-        raise ValueError("p must be a finite number in (0, 1].")
-    if not math.isfinite(float(p)) or not 0 < p <= 1:
-        raise ValueError("p must be a finite number in (0, 1].")
-
-
-def estimate_counts(counts, p):
-    """Apply inverse-probability weighting once to raw grouped counts."""
-    _validate_probability(p)
-    if isinstance(counts, pd.DataFrame):
-        if "value" not in counts.columns:
-            raise ValueError("counts DataFrame must contain a 'value' column.")
-        result = counts.copy()
-        values = pd.to_numeric(result["value"], errors="raise")
-        if not values.map(math.isfinite).all() or (values < 0).any():
-            raise ValueError("counts must be finite and nonnegative.")
-        result["value"] = values / float(p)
-        return result
-    if isinstance(counts, dict):
-        return {key: _estimate_value(value, p) for key, value in counts.items()}
-    return [_estimate_value(value, p) for value in counts]
+from src.sampling_core.artifacts import (
+    SampleBuildResult,
+    build_sample,
+    build_source_files_metadata,
+    check_sample_reuse,
+    compute_file_sha256,
+    format_sample_filename,
+    get_manifest_path,
+)
+from src.sampling_core.cli import main, run_sampling_cli
+from src.sampling_core.engine import (
+    materialize_sample_table,
+    register_sample_parquet,
+)
+from src.sampling_core.estimation import (
+    estimate_counts,
+    format_sample_results,
+)
 
 
-def _estimate_value(value, p):
-    if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise ValueError("counts must be numeric.")
-    value = float(value)
-    if not math.isfinite(value) or value < 0:
-        raise ValueError("counts must be finite and nonnegative.")
-    return value / float(p)
+def sample_and_query(
+    con: duckdb.DuckDBPyConnection,
+    question: str = "hours",
+    sample_rate: float = 0.10,
+    seed: int = 42,
+    source_view: str = "trips",
+) -> list[tuple[str, float]]:
+    """Materializează eșantionul, rulează interogarea comună și aplică ponderarea 1/p o dată."""
+    from src.queries import query_counts
+
+    materialize_sample_table(con, p=sample_rate, seed=seed, source_view=source_view)
+    raw_counts = query_counts(con, question=question, source="sample_trips")
+    return estimate_counts(raw_counts, p=sample_rate)
+
+
+__all__ = [
+    "SampleBuildResult",
+    "build_sample",
+    "build_source_files_metadata",
+    "check_sample_reuse",
+    "compute_file_sha256",
+    "estimate_counts",
+    "format_sample_filename",
+    "format_sample_results",
+    "get_manifest_path",
+    "main",
+    "materialize_sample_table",
+    "register_sample_parquet",
+    "run_sampling_cli",
+    "sample_and_query",
+]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
