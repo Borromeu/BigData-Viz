@@ -1,11 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-import hashlib
 import json
-import math
 from pathlib import Path
 import time
 from typing import Any
@@ -28,6 +26,15 @@ from src.sampling_core.engine import (
     validate_output_path,
     validate_source_view,
 )
+from src.sampling_core.manifests import (
+    _expected_manifest_identity,
+    _normalize_period,
+    build_source_files_metadata,
+    check_sample_reuse,
+    compute_file_sha256,
+    format_sample_filename,
+    get_manifest_path,
+)
 
 
 @dataclass(frozen=True)
@@ -38,59 +45,7 @@ class SampleBuildResult:
     build_seconds: float
     reused: bool
     check_seconds: float = 0.0
-
-
-def compute_file_sha256(file_path: str | Path) -> str:
-    path = Path(file_path)
-    hasher = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
-
-
-def format_sample_filename(dataset_id: str, sample_rate: float, seed: int) -> str:
-    validate_sample_rate(sample_rate)
-    validate_seed(seed)
-    rate_token = f"{float(sample_rate):g}"
-    return f"{dataset_id}_rate-{rate_token}_seed-{int(seed)}.parquet"
-
-
-def get_manifest_path(output_path: str | Path) -> Path:
-    out = Path(output_path)
-    return out.with_suffix(".manifest.json")
-
-
-def _normalize_period(
-    period: tuple[datetime, datetime] | dict[str, str] | None,
-) -> dict[str, str] | None:
-    if period is None:
-        return None
-    if isinstance(period, dict):
-        return {"start": str(period["start"]), "end": str(period["end"])}
-    start, end = period
-    return {"start": start.isoformat(), "end": end.isoformat()}
-
-
-def build_source_files_metadata(
-    source_files: Sequence[str | Path] | None,
-) -> list[dict[str, Any]]:
-    if not source_files:
-        return []
-    entries: list[dict[str, Any]] = []
-    for raw_path in source_files:
-        path = Path(raw_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Source file not found: {path}")
-        resolved = path.resolve()
-        entries.append(
-            {
-                "path": resolved.as_posix(),
-                "sha256": compute_file_sha256(resolved),
-                "size_bytes": resolved.stat().st_size,
-            }
-        )
-    return entries
+    size_bytes: int = 0
 
 
 def _resolve_p_and_output(
@@ -111,130 +66,6 @@ def _resolve_p_and_output(
     resolved_output = output if output is not None else output_path
     out_file = validate_output_path(resolved_output)
     return float(resolved_p), out_file
-
-
-def _expected_manifest_identity(
-    *,
-    dataset_id: str,
-    period: dict[str, str] | None,
-    source_files_meta: list[dict[str, Any]],
-    p: float,
-    seed: int,
-    out_file: Path,
-    effective_memory_limit: str | None,
-    filter_version: str = FILTER_VERSION,
-    config_version: str = CONFIG_VERSION,
-) -> dict[str, Any]:
-    settings: dict[str, Any] = {
-        "sampling_threads": SAMPLING_THREADS,
-    }
-    if effective_memory_limit is not None:
-        settings["memory_limit"] = effective_memory_limit
-
-    return {
-        "config_version": config_version,
-        "filter_version": filter_version,
-        "dataset_id": dataset_id,
-        "period": period,
-        "source_files": source_files_meta,
-        "method": "bernoulli",
-        "sample_rate": float(p),
-        "seed": int(seed),
-        "duckdb_version": duckdb.__version__,
-        "settings": settings,
-        "output_file": out_file.name,
-    }
-
-
-def check_sample_reuse(
-    output_path: str | Path,
-    *,
-    p: float,
-    seed: int,
-    con: duckdb.DuckDBPyConnection | None = None,
-    dataset_id: str = "custom",
-    period: tuple[datetime, datetime] | dict[str, str] | None = None,
-    source_files: Sequence[str | Path] | None = None,
-    source_files_meta: list[dict[str, Any]] | None = None,
-    filter_version: str = FILTER_VERSION,
-    config_version: str = CONFIG_VERSION,
-) -> tuple[bool, dict[str, Any] | None]:
-    """Verifică dacă un eșantion existent și manifestul său pot fi reutilizate în siguranță."""
-    out_file = validate_output_path(output_path)
-    manifest_file = get_manifest_path(out_file)
-    if not out_file.exists() or not manifest_file.exists():
-        return False, None
-
-    try:
-        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False, None
-
-    if not isinstance(manifest, dict):
-        return False, None
-
-    if source_files_meta is not None:
-        resolved_sources_meta = source_files_meta
-    else:
-        try:
-            resolved_sources_meta = build_source_files_metadata(source_files)
-        except FileNotFoundError:
-            return False, manifest
-
-    effective_memory_limit = get_memory_limit(con) if con is not None else None
-
-    expected = _expected_manifest_identity(
-        dataset_id=dataset_id,
-        period=_normalize_period(period),
-        source_files_meta=resolved_sources_meta,
-        p=p,
-        seed=seed,
-        out_file=out_file,
-        effective_memory_limit=effective_memory_limit,
-        filter_version=filter_version,
-        config_version=config_version,
-    )
-
-    for key, expected_val in expected.items():
-        if key == "sample_rate":
-            actual_rate = manifest.get("sample_rate")
-            if not isinstance(actual_rate, (int, float)) or not math.isclose(
-                float(actual_rate), float(expected_val), rel_tol=0.0, abs_tol=1e-12
-            ):
-                return False, manifest
-        elif key == "settings":
-            actual_settings = manifest.get("settings")
-            if not isinstance(actual_settings, dict):
-                return False, manifest
-            if actual_settings.get("sampling_threads") != SAMPLING_THREADS:
-                return False, manifest
-            actual_mem = actual_settings.get("memory_limit")
-            if not isinstance(actual_mem, str) or not actual_mem.strip():
-                return False, manifest
-            if effective_memory_limit is not None and actual_mem != effective_memory_limit:
-                return False, manifest
-        elif manifest.get(key) != expected_val:
-            return False, manifest
-
-    row_count = manifest.get("row_count")
-    output_sha256 = manifest.get("output_sha256")
-    build_seconds = manifest.get("build_seconds")
-    if isinstance(row_count, bool) or not isinstance(row_count, int) or row_count < 0:
-        return False, manifest
-    if not isinstance(output_sha256, str) or len(output_sha256) != 64:
-        return False, manifest
-    if (
-        isinstance(build_seconds, bool)
-        or not isinstance(build_seconds, (int, float))
-        or not math.isfinite(float(build_seconds))
-        or float(build_seconds) < 0
-    ):
-        return False, manifest
-
-    if compute_file_sha256(out_file) != output_sha256:
-        return False, manifest
-
-    return True, manifest
 
 
 def _read_parquet_row_count(con: duckdb.DuckDBPyConnection, parquet_path: Path) -> int:
@@ -299,12 +130,18 @@ def build_sample(
                 build_seconds=float(existing_manifest["build_seconds"]),
                 reused=True,
                 check_seconds=check_seconds,
+                size_bytes=out_file.stat().st_size,
             )
         if not overwrite:
             raise ValueError(
                 f"Existing sample or manifest at {out_file} is incompatible or already present; "
                 "refusing to reuse or overwrite without explicit overwrite=True."
             )
+        # La overwrite=True, eliminăm în siguranță artefactul și manifestul vechi/corupte
+        if out_file.exists():
+            out_file.unlink()
+        if manifest_file.exists():
+            manifest_file.unlink()
     else:
         check_seconds = time.perf_counter() - check_start
 
@@ -354,4 +191,5 @@ def build_sample(
         build_seconds=build_seconds,
         reused=False,
         check_seconds=check_seconds,
+        size_bytes=out_file.stat().st_size,
     )

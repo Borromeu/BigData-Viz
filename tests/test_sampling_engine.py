@@ -1,4 +1,4 @@
-﻿from collections import Counter
+from collections import Counter
 from pathlib import Path
 import tempfile
 import unittest
@@ -106,7 +106,7 @@ class SamplingEngineTests(unittest.TestCase):
             )
             return 0.001
 
-        with mock.patch("src.sampling.materialize_sample_table", side_effect=deterministic_subset):
+        with mock.patch("src.sampling_core.engine.materialize_sample_table", side_effect=deterministic_subset):
             estimated_rows = sample_and_query(
                 self.con,
                 question="distance",

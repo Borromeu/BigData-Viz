@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 import json
 from pathlib import Path
 import tempfile
@@ -187,6 +187,27 @@ class SamplingArtifactsTests(unittest.TestCase):
                 source_files=[raw_file],
             )
             self.assertFalse(ok_diff_hash)
+
+    def test_overwrite_replaces_incompatible_or_corrupt_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = Path(tmpdir) / "corrupt_sample.parquet"
+            manifest_file = get_manifest_path(out_file)
+
+            # Scriem artefacte corupte / incompatibile existente
+            out_file.write_text("corrupt content", encoding="utf-8")
+            manifest_file.write_text("{}", encoding="utf-8")
+
+            # Fără overwrite=True, refuză
+            with self.assertRaises(ValueError):
+                build_sample(self.con, 0.5, 42, out_file, overwrite=False)
+
+            # Cu overwrite=True, înlocuiește fișierele și reconstruiește cu succes
+            result = build_sample(self.con, 0.5, 42, out_file, overwrite=True)
+            self.assertFalse(result.reused)
+            self.assertTrue(out_file.exists())
+            self.assertTrue(manifest_file.exists())
+            self.assertGreater(out_file.stat().st_size, 0)
+            self.assertGreaterEqual(result.row_count, 0)
 
 
 if __name__ == "__main__":

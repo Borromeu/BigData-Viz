@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
@@ -22,6 +22,7 @@ from src.sampling_core.artifacts import (
     build_source_files_metadata,
     format_sample_filename,
 )
+from src.sampling_core.manifests import update_build_log
 
 RegisterTripsFn = Callable[[duckdb.DuckDBPyConnection, Sequence[Path], datetime, datetime], None]
 
@@ -48,6 +49,7 @@ def run_sampling_cli(
     raw_dir: Path | None = None,
     samples_dir: Path | None = None,
     register_trips_fn: RegisterTripsFn | None = None,
+    overwrite: bool = False,
 ) -> list[dict[str, Any]]:
     stage_cfg = get_stage(stage)
     dataset_cfg = get_dataset(dataset)
@@ -90,15 +92,18 @@ def run_sampling_cli(
                     dataset_id=dataset_cfg.dataset_id,
                     period=(dataset_cfg.start, dataset_cfg.end),
                     source_files_meta=source_files_meta,
-                    reuse=True,
+                    reuse=(not overwrite),
+                    overwrite=overwrite,
                 )
                 generated.append(
                     {
+                        "dataset_id": dataset_cfg.dataset_id,
                         "sample_rate": rate,
                         "seed": seed,
                         "output_path": str(result.output_path),
                         "manifest_path": str(result.manifest_path),
                         "row_count": result.row_count,
+                        "size_bytes": result.size_bytes,
                         "build_seconds": result.build_seconds,
                         "check_seconds": result.check_seconds,
                         "reused": result.reused,
@@ -107,6 +112,7 @@ def run_sampling_cli(
     finally:
         con.close()
 
+    update_build_log(target_dir / "build_log.csv", generated)
     return generated
 
 
@@ -136,6 +142,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Director opțional pentru eșantioanele generate (implicit data/samples)",
     )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Suprascrie eșantioanele existente dacă sunt incompatibile sau se dorește regenerarea",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -144,6 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             dataset=args.dataset,
             raw_dir=args.raw_dir,
             samples_dir=args.samples_dir,
+            overwrite=args.overwrite,
         )
     except Exception as exc:
         print(f"[Sampling CLI] Error: {exc}", file=sys.stderr)

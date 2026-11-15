@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 import json
 from pathlib import Path
 import sys
@@ -11,7 +11,7 @@ import duckdb
 
 from src.config import CONFIG_VERSION, FILTER_VERSION
 from src.sampling import get_manifest_path, main, run_sampling_cli
-from src.sampling_core import artifacts
+from src.sampling_core import artifacts, manifests
 
 
 def _mock_register_trips(
@@ -137,7 +137,7 @@ class SamplingCliTests(unittest.TestCase):
             raw_parquet = raw_dir / "yellow_tripdata_2025-01.parquet"
             self._write_synthetic_tlc_parquet(raw_parquet)
 
-            real_sha256 = artifacts.compute_file_sha256
+            real_sha256 = manifests.compute_file_sha256
             raw_hash_calls = 0
 
             def counting_sha256(file_path: str | Path) -> str:
@@ -146,7 +146,7 @@ class SamplingCliTests(unittest.TestCase):
                     raw_hash_calls += 1
                 return real_sha256(file_path)
 
-            with mock.patch.object(artifacts, "compute_file_sha256", side_effect=counting_sha256):
+            with mock.patch.object(manifests, "compute_file_sha256", side_effect=counting_sha256):
                 first_run = run_sampling_cli(
                     stage="pilot",
                     dataset="jan",
@@ -168,6 +168,13 @@ class SamplingCliTests(unittest.TestCase):
             self.assertTrue(all(item["reused"] for item in second_run))
             for first_item, second_item in zip(first_run, second_run, strict=True):
                 self.assertEqual(second_item["build_seconds"], first_item["build_seconds"])
+
+            build_log = samples_dir / "build_log.csv"
+            self.assertTrue(build_log.exists())
+            log_text = build_log.read_text(encoding="utf-8")
+            self.assertIn("jan", log_text)
+            self.assertIn("0.01", log_text)
+            self.assertIn("0.1", log_text)
 
     def test_cli_fails_explicitly_without_fallback_when_src_data_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
