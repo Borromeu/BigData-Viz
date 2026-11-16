@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
+import shutil
+import tempfile
 import time
 from typing import Any
 
@@ -76,6 +78,43 @@ def _read_parquet_row_count(con: duckdb.DuckDBPyConnection, parquet_path: Path) 
     return int(row[0])
 
 
+def _publish_artifact_pair(
+    new_sample: Path,
+    new_manifest: Path,
+    sample_path: Path,
+    manifest_path: Path,
+    staging_dir: Path,
+) -> None:
+    """Publica ambele fisiere; revine la versiunile vechi daca publicarea esueaza."""
+    old_sample = staging_dir / "previous_sample.backup"
+    old_manifest = staging_dir / "previous_manifest.backup"
+    had_sample = sample_path.exists()
+    had_manifest = manifest_path.exists()
+
+    # Facem copiile de siguranta inainte sa modificam vreun fisier publicat.
+    if had_sample:
+        shutil.copy2(sample_path, old_sample)
+    if had_manifest:
+        shutil.copy2(manifest_path, old_manifest)
+
+    try:
+        # replace() inlocuieste un fisier existent, inclusiv pe Windows.
+        new_sample.replace(sample_path)
+        new_manifest.replace(manifest_path)
+    except Exception:
+        # Daca al doilea replace esueaza, restauram si primul fisier.
+        if had_sample:
+            old_sample.replace(sample_path)
+        elif sample_path.exists():
+            sample_path.unlink()
+
+        if had_manifest:
+            old_manifest.replace(manifest_path)
+        elif manifest_path.exists():
+            manifest_path.unlink()
+        raise
+
+
 def build_sample(
     con: duckdb.DuckDBPyConnection,
     p: float | None = None,
@@ -137,69 +176,88 @@ def build_sample(
                 f"Existing sample or manifest at {out_file} is incompatible or already present; "
                 "refusing to reuse or overwrite without explicit overwrite=True."
             )
-        # La overwrite=True, eliminăm artefactul și manifestul vechi/incompatibile.
-        if out_file.exists():
-            out_file.unlink()
-        if manifest_file.exists():
-            manifest_file.unlink()
     else:
         check_seconds = time.perf_counter() - check_start
 
     export_sql = get_export_sample_sql()
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Cronometrul măsoară exportul eșantionului, fără validarea ulterioară.
-    previous_threads = get_threads(con)
-    set_threads(con, SAMPLING_THREADS)
-    build_start = time.perf_counter()
+    # Staging-ul sta pe acelasi sistem de fisiere cu destinatia finala.
+    # Un export esuat nu atinge esantionul si manifestul existente.
+    with tempfile.TemporaryDirectory(
+        prefix=".sampling_stage_",
+        dir=out_file.parent,
+    ) as temp_dir_name:
+        staging_dir = Path(temp_dir_name)
+        staged_sample = staging_dir / out_file.name
+        staged_manifest = staging_dir / manifest_file.name
 
-    try:
-        con.execute("SET VARIABLE sample_output_path = ?", [str(out_file.resolve())])
+        previous_threads = get_threads(con)
+        set_threads(con, SAMPLING_THREADS)
+        build_start = time.perf_counter()
+        try:
+            con.execute(
+                "SET VARIABLE sample_output_path = ?",
+                [str(staged_sample.resolve())],
+            )
 
-        # Relația Bernoulli este construită prin API-ul DuckDB, fără înlocuirea
-        # manuală a procentului și seedului în șirul SQL.
-        sample_relation = con.table(safe_source).sample(
-            percent=resolved_p * 100.0,
-            seed=int(seed),
-            method="bernoulli",
+            # Valorile p si seed raman in Relational API, nu in SQL.
+            sample_relation = con.table(safe_source).sample(
+                percent=resolved_p * 100.0,
+                seed=int(seed),
+                method="bernoulli",
+            )
+            con.register("__sampling_relation", sample_relation)
+            try:
+                con.execute(export_sql)
+            finally:
+                con.unregister("__sampling_relation")
+        finally:
+            # Cronometrul nu include validarea si publicarea artefactelor.
+            build_seconds = time.perf_counter() - build_start
+            set_threads(con, previous_threads)
+
+        if not staged_sample.exists() or staged_sample.stat().st_size == 0:
+            raise RuntimeError(
+                f"Export failed: Parquet file was not created at {staged_sample}"
+            )
+
+        # Validam si citim noul Parquet inainte sa atingem versiunea veche.
+        row_count = _read_parquet_row_count(con, staged_sample)
+        output_sha256 = compute_file_sha256(staged_sample)
+
+        # Manifestul descrie calea PUBLICATA, nu calea temporara.
+        manifest = _expected_manifest_identity(
+            dataset_id=dataset_id,
+            period=normalized_period,
+            source_files_meta=resolved_sources_meta,
+            p=resolved_p,
+            seed=seed,
+            out_file=out_file,
+            effective_memory_limit=effective_memory_limit,
+            filter_version=filter_version,
+            config_version=config_version,
+        )
+        manifest["row_count"] = row_count
+        manifest["output_sha256"] = output_sha256
+        manifest["build_seconds"] = build_seconds
+
+        staged_manifest.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False),
+            encoding="utf-8",
         )
 
-        # Înregistrarea temporară este disponibilă șablonului SQL de export.
-        con.register("__sampling_relation", sample_relation)
-        try:
-            con.execute(export_sql)
-        finally:
-            con.unregister("__sampling_relation")
+        # Validam si JSON-ul nou inainte de publicare.
+        json.loads(staged_manifest.read_text(encoding="utf-8"))
 
-    finally:
-        build_seconds = time.perf_counter() - build_start
-        set_threads(con, previous_threads)
+        _publish_artifact_pair(
+            staged_sample,
+            staged_manifest,
+            out_file,
+            manifest_file,
+            staging_dir,
+        )
 
-    if not out_file.exists() or out_file.stat().st_size == 0:
-        raise RuntimeError(f"Export failed: Parquet file was not created at {out_file}")
-
-    row_count = _read_parquet_row_count(con, out_file)
-    output_sha256 = compute_file_sha256(out_file)
-
-    manifest = _expected_manifest_identity(
-        dataset_id=dataset_id,
-        period=normalized_period,
-        source_files_meta=resolved_sources_meta,
-        p=resolved_p,
-        seed=seed,
-        out_file=out_file,
-        effective_memory_limit=effective_memory_limit,
-        filter_version=filter_version,
-        config_version=config_version,
-    )
-    manifest["row_count"] = row_count
-    manifest["output_sha256"] = output_sha256
-    manifest["build_seconds"] = build_seconds
-
-    manifest_file.write_text(
-        json.dumps(manifest, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
     return SampleBuildResult(
         output_path=out_file,
         manifest_path=manifest_file,

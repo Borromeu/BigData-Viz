@@ -35,6 +35,56 @@ class SamplingArtifactsTests(unittest.TestCase):
             """
         )
 
+    def test_overwrite_publication_failure_restores_existing_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = Path(tmpdir) / "sample.parquet"
+
+            # Construim esantionul original si manifestul sau.
+            build_sample(self.con, 0.5, 42, out_file)
+            manifest_file = get_manifest_path(out_file)
+
+            original_parquet = out_file.read_bytes()
+            original_manifest = manifest_file.read_bytes()
+
+            # Pastram functia reala pentru operatiile care trebuie sa reuseasca.
+            original_replace = Path.replace
+
+            def fail_manifest_replace(source: Path, target: Path) -> Path:
+                # Simulam eroarea la publicarea noului manifest,
+                # dupa ce noul Parquet a fost deja publicat.
+                if (
+                    source.name == manifest_file.name
+                    and source.parent != manifest_file.parent
+                    and Path(target) == manifest_file
+                ):
+                    raise OSError("Simulated manifest publication failure")
+
+                return original_replace(source, target)
+
+            with mock.patch.object(
+                Path,
+                "replace",
+                new=fail_manifest_replace,
+            ):
+                with self.assertRaisesRegex(
+                    OSError,
+                    "Simulated manifest publication failure",
+                ):
+                    build_sample(
+                        self.con,
+                        0.5,
+                        42,
+                        out_file,
+                        overwrite=True,
+                    )
+
+            # Ambele fisiere originale trebuie sa fie restaurate.
+            self.assertTrue(out_file.exists())
+            self.assertTrue(manifest_file.exists())
+
+            self.assertEqual(out_file.read_bytes(), original_parquet)
+            self.assertEqual(manifest_file.read_bytes(), original_manifest)
+
     def tearDown(self) -> None:
         self.con.close()
 
@@ -209,6 +259,41 @@ class SamplingArtifactsTests(unittest.TestCase):
             self.assertGreater(out_file.stat().st_size, 0)
             self.assertGreaterEqual(result.row_count, 0)
 
+
+    def test_overwrite_failure_preserves_existing_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = Path(tmpdir) / "sample.parquet"
+
+            # Construim initial un esantion valid.
+            build_sample(self.con, 0.5, 42, out_file)
+            manifest_file = get_manifest_path(out_file)
+
+            # Salvam continutul original al ambelor fisiere.
+            original_parquet = out_file.read_bytes()
+            original_manifest = manifest_file.read_bytes()
+
+            # Simulam o eroare SQL la regenerare.
+            with mock.patch.object(
+                artifacts,
+                "get_export_sample_sql",
+                return_value="SELECT * FROM missing_table_forced_error",
+            ):
+                with self.assertRaises(duckdb.Error):
+                    build_sample(
+                        self.con,
+                        0.5,
+                        42,
+                        out_file,
+                        overwrite=True,
+                    )
+
+            # Fisierele vechi trebuie sa existe in continuare.
+            self.assertTrue(out_file.exists())
+            self.assertTrue(manifest_file.exists())
+
+            # Continutul lor trebuie sa fie neschimbat.
+            self.assertEqual(out_file.read_bytes(), original_parquet)
+            self.assertEqual(manifest_file.read_bytes(), original_manifest)
 
 if __name__ == "__main__":
     unittest.main()
