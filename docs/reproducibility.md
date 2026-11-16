@@ -13,8 +13,9 @@ Pentru eșantionarea curselor de taxi se utilizează metoda **Bernoulli** cu see
 ```sql
 SELECT *
 FROM trips
-USING SAMPLE {sample_percent}% (bernoulli, {seed})
+WHERE random() < getvariable('sampling_probability')
 ```
+Implementarea folosește DuckDB 1.5.6 și realizează eșantionarea Bernoulli prin evaluarea condiției random() < p pentru fiecare rând. Probabilitatea p este transmisă printr-o variabilă DuckDB, iar generatorul aleator este inițializat înaintea fiecărei eșantionări prin setseed(). Seed-ul întreg este normalizat folosind formula seed / 4294967295.0. Pentru reproductibilitate, eșantionarea se execută cu threads = 1.
 
 ### De ce este obligatoriu `threads = 1`?
 Documentația oficială DuckDB precizează explicit:
@@ -40,18 +41,64 @@ $$n \sim \text{Binomial}(N, p)$$
 * Varianța: $\text{Var}(n) = N \cdot p \cdot (1 - p)$
 * Deviația standard: $\sigma = \sqrt{N \cdot p \cdot (1 - p)}$
 
+
 ### Exemplu concret pe datasetul NYC Yellow Taxi (ianuarie 2025):
-Populația filtrată eligibilă conține $N \approx 3.475.000$ rânduri:
-* Pentru **$p = 0.01$ (1%)**:
-  * $\mathbb{E}[n] \approx 34.750$ rânduri, $\sigma \approx 185$ rânduri.
-  * Realizarea obținută cu seed-ul 42: **33.709 rânduri**.
-* Pentru **$p = 0.10$ (10%)**:
-  * $\mathbb{E}[n] \approx 347.500$ rânduri, $\sigma \approx 559$ rânduri.
-  * Realizarea obținută cu seed-ul 42: **338.916 rânduri**.
 
-Abaterile observate sunt perfect normale din punct de vedere statistic și reflectă natura metodei Bernoulli, fără a constitui o eroare de implementare.
+Populația analizată este cea filtrată conform regulilor comune
+din `src.data.register_trips()`, nu totalul rândurilor brute
+din fișierul Parquet.
 
----
+- Rânduri brute: **3.475.226**
+- Rânduri eligibile: **3.384.311**
+- Populația utilizată pentru sampling: **N = 3.384.311**
+
+Pentru eșantionarea Bernoulli, numărul de rânduri selectate
+urmează o distribuție binomială:
+
+- E[n] = N × p
+- Var(n) = N × p × (1 - p)
+- σ = √(N × p × (1 - p))
+
+**Pentru p = 0.01 (1%):**
+
+- Valoarea așteptată: **33.843,11 rânduri**
+- Deviația standard: **aproximativ 183,04 rânduri**
+- Rezultatul observat, seed 42: **33.686 rânduri**
+- Timpul de generare: **0,315 s**
+
+**Pentru p = 0.10 (10%):**
+
+- Valoarea așteptată: **338.431,10 rânduri**
+- Deviația standard: **aproximativ 551,89 rânduri**
+- Rezultatul observat, seed 42: **338.514 rânduri**
+- Timpul de generare: **0,335 s**
+
+### Interpretarea rezultatelor
+
+Numărul efectiv de rânduri diferă de valoarea așteptată,
+deoarece eșantionarea Bernoulli este probabilistică.
+
+Ambele rezultate observate se află la mai puțin de o deviație
+standard față de valoarea așteptată.
+
+Testarea s-a realizat cu Python 3.13.2 și DuckDB 1.5.6,
+folosind un singur fir de execuție și metoda
+`random()` împreună cu `setseed()`.
+
+Eșantioanele au fost generate în fișierele:
+
+- `jan_rate-0.01_seed-42.parquet`
+- `jan_rate-0.1_seed-42.parquet`
+
+Manifestele JSON aferente au confirmat reutilizarea ambelor
+eșantioane fără regenerare, păstrând timpii inițiali de
+construire.
+
+Reproductibilitatea presupune aceeași populație de intrare,
+aceleași setări și aceeași versiune DuckDB. Rezultatele nu
+sunt garantate identice între versiuni sau implementări
+diferite ale eșantionării.
+
 
 ## 3. Comportamentul categoriilor rare și eșantioanelor goale
 

@@ -201,17 +201,23 @@ def build_sample(
                 [str(staged_sample.resolve())],
             )
 
-            # Valorile p si seed raman in Relational API, nu in SQL.
-            sample_relation = con.table(safe_source).sample(
-                percent=resolved_p * 100.0,
-                seed=int(seed),
-                method="bernoulli",
+            # Transmitem probabilitatea prin parametrul DuckDB.
+            con.execute(
+                "SET VARIABLE sampling_probability = ?",
+                [resolved_p],
             )
-            con.register("__sampling_relation", sample_relation)
-            try:
-                con.execute(export_sql)
-            finally:
-                con.unregister("__sampling_relation")
+
+            # Normalizam seedul intreg pentru setseed().
+            normalized_seed = float(seed) / 4294967295.0
+
+            con.execute(
+                "SELECT setseed(?)",
+                [normalized_seed],
+            ).fetchone()
+
+            # Executam exportul folosind interogarea din fisierul SQL.
+            con.execute(export_sql)
+
         finally:
             # Cronometrul nu include validarea si publicarea artefactelor.
             build_seconds = time.perf_counter() - build_start

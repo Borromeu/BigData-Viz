@@ -88,15 +88,16 @@ def get_memory_limit(con: duckdb.DuckDBPyConnection) -> str:
 
 
 
+
 def materialize_sample_table(
     con: duckdb.DuckDBPyConnection,
     p: float = 0.10,
     seed: int = 42,
     source_view: str = "trips",
 ) -> float:
-    """Materializeaza esantionul Bernoulli intr-un tabel temporar."""
+    """Materializeaza un esantion Bernoulli reproductibil."""
 
-    safe_source = validate_source_view(source_view)
+    validate_source_view(source_view)
     validate_sample_rate(p)
     validate_seed(seed)
 
@@ -106,24 +107,30 @@ def materialize_sample_table(
     start_time = time.perf_counter()
 
     try:
-        sample_relation = con.table(safe_source).sample(
-            percent=float(p) * 100.0,
-            seed=int(seed),
-            method="bernoulli",
+        # Probabilitatea este transmisa ca parametru SQL.
+        con.execute(
+            "SET VARIABLE sampling_probability = ?",
+            [float(p)],
         )
 
-        con.register("__sampling_relation", sample_relation)
+        # setseed() accepta o valoare normalizata.
+        # Seedul original este validat ca intreg uint32.
+        normalized_seed = float(seed) / 4294967295.0
 
-        try:
-            con.execute(_MATERIALIZE_SAMPLE_TABLE_SQL)
-        finally:
-            con.unregister("__sampling_relation")
+        con.execute(
+            "SELECT setseed(?)",
+            [normalized_seed],
+        ).fetchone()
+
+        # Interogarea de sampling ramane in fisierul .sql.
+        con.execute(_MATERIALIZE_SAMPLE_TABLE_SQL)
 
     finally:
         elapsed = time.perf_counter() - start_time
         set_threads(con, previous_threads)
 
     return elapsed
+
 
 
 
