@@ -59,20 +59,10 @@ def validate_output_path(output: str | Path | None) -> Path:
     raise ValueError("output path must be a str or pathlib.Path.")
 
 
-def format_bernoulli_sql(template: str, source_view: str, p: float, seed: int) -> str:
-    safe_source = validate_source_view(source_view)
-    validate_sample_rate(p)
-    validate_seed(seed)
-    sample_percent = repr(float(p) * 100.0)
-    return (
-        template.replace("{source_view}", safe_source)
-        .replace("{sample_percent}", sample_percent)
-        .replace("{seed}", str(int(seed)))
-    )
 
-
-def get_export_sample_sql(source_view: str, p: float, seed: int) -> str:
-    return format_bernoulli_sql(_EXPORT_SAMPLE_PARQUET_SQL, source_view, p, seed)
+def get_export_sample_sql() -> str:
+    """Returneaza interogarea SQL pentru exportul Parquet."""
+    return _EXPORT_SAMPLE_PARQUET_SQL
 
 
 def get_count_parquet_rows_sql() -> str:
@@ -97,23 +87,44 @@ def get_memory_limit(con: duckdb.DuckDBPyConnection) -> str:
     return str(row[0])
 
 
+
 def materialize_sample_table(
     con: duckdb.DuckDBPyConnection,
     p: float = 0.10,
     seed: int = 42,
     source_view: str = "trips",
 ) -> float:
-    """Materializează eșantionul Bernoulli într-un tabel temporar sample_trips."""
-    sql = format_bernoulli_sql(_MATERIALIZE_SAMPLE_TABLE_SQL, source_view, p, seed)
+    """Materializeaza esantionul Bernoulli intr-un tabel temporar."""
+
+    safe_source = validate_source_view(source_view)
+    validate_sample_rate(p)
+    validate_seed(seed)
+
     previous_threads = get_threads(con)
     set_threads(con, SAMPLING_THREADS)
+
     start_time = time.perf_counter()
+
     try:
-        con.execute(sql)
+        sample_relation = con.table(safe_source).sample(
+            percent=float(p) * 100.0,
+            seed=int(seed),
+            method="bernoulli",
+        )
+
+        con.register("__sampling_relation", sample_relation)
+
+        try:
+            con.execute(_MATERIALIZE_SAMPLE_TABLE_SQL)
+        finally:
+            con.unregister("__sampling_relation")
+
     finally:
         elapsed = time.perf_counter() - start_time
         set_threads(con, previous_threads)
+
     return elapsed
+
 
 
 def register_sample_parquet(

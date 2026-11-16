@@ -137,7 +137,7 @@ def build_sample(
                 f"Existing sample or manifest at {out_file} is incompatible or already present; "
                 "refusing to reuse or overwrite without explicit overwrite=True."
             )
-        # La overwrite=True, eliminăm în siguranță artefactul și manifestul vechi/corupte
+        # La overwrite=True, eliminăm artefactul și manifestul vechi/incompatibile.
         if out_file.exists():
             out_file.unlink()
         if manifest_file.exists():
@@ -145,16 +145,32 @@ def build_sample(
     else:
         check_seconds = time.perf_counter() - check_start
 
-    export_sql = get_export_sample_sql(safe_source, resolved_p, seed)
+    export_sql = get_export_sample_sql()
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Cronometrul măsoară strict exportul eșantionului, fără validarea ulterioară.
+    # Cronometrul măsoară exportul eșantionului, fără validarea ulterioară.
     previous_threads = get_threads(con)
     set_threads(con, SAMPLING_THREADS)
     build_start = time.perf_counter()
+
     try:
         con.execute("SET VARIABLE sample_output_path = ?", [str(out_file.resolve())])
-        con.execute(export_sql)
+
+        # Relația Bernoulli este construită prin API-ul DuckDB, fără înlocuirea
+        # manuală a procentului și seedului în șirul SQL.
+        sample_relation = con.table(safe_source).sample(
+            percent=resolved_p * 100.0,
+            seed=int(seed),
+            method="bernoulli",
+        )
+
+        # Înregistrarea temporară este disponibilă șablonului SQL de export.
+        con.register("__sampling_relation", sample_relation)
+        try:
+            con.execute(export_sql)
+        finally:
+            con.unregister("__sampling_relation")
+
     finally:
         build_seconds = time.perf_counter() - build_start
         set_threads(con, previous_threads)
