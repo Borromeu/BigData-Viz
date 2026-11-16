@@ -9,4 +9,4 @@ WHERE tpep_pickup_datetime IS NOT NULL
   AND tpep_pickup_datetime < TIMESTAMP '{end_str}'
   AND trip_distance IS NOT NULL
   AND isfinite(CAST(trip_distance AS DOUBLE))
-  AND CAST(trip_distance AS DOUBLE) > 0
+  AND CAST(trip_distance AS DOUBLE) > 0;
