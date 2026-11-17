@@ -1,6 +1,7 @@
 .venv
 .venv-tools
 *.pyc
-
-data/raw/*.parquet
+__pycache__/
+data/raw/*
 !data/raw/.gitkeep
+data/samples/
