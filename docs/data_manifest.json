@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-11-15T12:43:03.668712",
+  "files": [
+    {
+      "filename": "yellow_tripdata_2025-01.parquet",
+      "relative_path": "data/raw/yellow_tripdata_2025-01.parquet",
+      "url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-01.parquet",
+      "size_bytes": 59158238,
+      "sha256": "9af277e4c0d3f9deb30644da822981e1e7df6af58313170fd3aa8a474485488a"
+    },
+    {
+      "filename": "yellow_tripdata_2025-02.parquet",
+      "relative_path": "data/raw/yellow_tripdata_2025-02.parquet",
+      "url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-02.parquet",
+      "size_bytes": 60343086,
+      "sha256": "037cba555a73663f3a51a2c27816e40e3feb364769942bdf122b9da31e377bd3"
+    },
+    {
+      "filename": "yellow_tripdata_2025-03.parquet",
+      "relative_path": "data/raw/yellow_tripdata_2025-03.parquet",
+      "url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-03.parquet",
+      "size_bytes": 69964745,
+      "sha256": "20c4b77cce457b7cfdae77c5069ca7dc91c167f876a41467f4502ab69487a186"
+    },
+    {
+      "filename": "taxi_zone_lookup.csv",
+      "relative_path": "data/raw/taxi_zone_lookup.csv",
+      "url": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv",
+      "size_bytes": 12065,
+      "sha256": "5e8f5ff10175d75f468c6fbdf0f68ca93e77ecd48942718d5403f8b7232e90b0"
+    }
+  ]
+}
