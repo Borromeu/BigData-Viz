@@ -109,10 +109,13 @@ def verify_data_manifest(manifest_path: Path = MANIFEST_PATH, files_to_check: Se
         filename = file_path.name
         if filename not in manifest_map:
             raise ValueError(f"Integritate eșuată: fișierul {filename} nu este înregistrat în manifest.")
-        if not file_path.exists():
-            raise FileNotFoundError(f"Integritate eșuată: fișierul nu există pe disc: {file_path}")
-
         entry = manifest_map[filename]
+        if not file_path.exists():
+            message = f"Integritate eșuată: fișierul nu există pe disc: {file_path}"
+            if entry.get("url"):
+                message += f"\nSursa de descărcare: {entry['url']}"
+            raise FileNotFoundError(message)
+
         current_size, current_hash = compute_file_sha256(file_path)
 
         if current_size != entry["size_bytes"]:

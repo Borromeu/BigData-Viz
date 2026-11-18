@@ -1,5 +1,5 @@
-pandas
-numpy
+pandas==3.1.1
+numpy==2.5.5
 duckdb==1.5.6
 plotly==7.1.0
 ipykernel==7.4.0

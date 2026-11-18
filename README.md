@@ -538,7 +538,45 @@ La următoarea sesiune, rulați din nou celulele de la început. Fișierul `.ipy
 - Actualizați Python și dependențele prin modificări revizuite în PR.
 - Procesați datele mari în DuckDB și transferați în Python rezultatele necesare graficelor.
 
-## 14. Documentație oficială
+## 14. Benchmark pilot — A3
+
+Cu `.venv` activ, din rădăcina proiectului:
+
+```bash
+python -m src.data --dataset jan --check
+python -m src.sampling --stage pilot --dataset jan
+python -m src.benchmark --stage pilot --dataset jan --run-id pilot_01
+```
+
+Pentru o demonstrație pe fixture-ul comun, fără descărcarea datelor TLC:
+
+```bash
+python -m src.benchmark --fixture --run-id fixture_demo_01
+```
+
+Rezultatele se scriu în `results/runs/<run_id>/`. Folosiți un ID nou la fiecare
+rulare. Demonstrația este etichetată `fixture_jan` și nu reprezintă un benchmark
+pe datele reale. Detalii despre protocol, teste și ieșiri: [docs/benchmark.md](docs/benchmark.md).
+
+## 15. Demonstrația pilot
+
+Deschideți `notebooks/demo.ipynb` în VS Code, selectați kernelul `.venv` și
+rulați **Restart Kernel → Run All**. Notebookul așteaptă `pilot_01` în
+`results/runs/`. Pentru altă rulare completă, modificați `RUN_ID` în prima celulă
+de cod. Notebookul citește rezultatele, timpii și erorile deja salvate și execută
+o interogare demonstrativă pe fixture.
+
+Pentru a genera cele două grafice offline, din rădăcina repository-ului, cu
+`.venv` activ:
+
+```bash
+python -m src.render --run-id pilot_01
+```
+
+Deschideți `hours.html` și `distance.html` din `results/runs/pilot_01/` în browser.
+Exportul folosește `results.csv` și `run_manifest.json` din directorul rulării.
+
+## 16. Documentație oficială
 
 - [Python — medii virtuale](https://docs.python.org/3.13/library/venv.html)
 - [DuckDB 1.5 — Python API](https://duckdb.org/docs/1.5/clients/python/overview)

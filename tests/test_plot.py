@@ -43,6 +43,17 @@ class PlotTests(unittest.TestCase):
         self.assertTrue(any("Empty sample" in annotation.text for annotation in fig.layout.annotations))
         self.assertEqual(list(fig.data[1].y), [0, 0, 0, 0, 0])
 
+    def test_empty_sample_label_follows_selected_rate(self):
+        exact = frame([1, 2, 3, 4, 5])
+        empty = frame([0, 0, 0, 0, 0])
+        fig = plot_distance_distribution(
+            exact, empty, sample_rate=0.01,
+            status="empty_sample", sample_options={0.01: empty, 0.10: exact},
+        )
+        empty_button, nonempty_button = fig.layout.updatemenus[0].buttons
+        self.assertTrue(any("Empty sample" in a["text"] for a in empty_button.args[1]["annotations"]))
+        self.assertFalse(any("Empty sample" in a["text"] for a in nonempty_button.args[1]["annotations"]))
+
 
 if __name__ == "__main__":
     unittest.main()
