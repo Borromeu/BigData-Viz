@@ -1,0 +1,5 @@
+run_id,dataset_id,config_version,question,method,sample_rate,seed,metric,value,status
+pilot_01,jan,1,hours,sample,0.01,42,normalized_absolute_error,0.021589327931150537,ok
+pilot_01,jan,1,hours,sample,0.1,42,normalized_absolute_error,0.006174668935567683,ok
+pilot_01,jan,1,distance,sample,0.01,42,total_variation,0.0028132811599130073,ok
+pilot_01,jan,1,distance,sample,0.1,42,total_variation,0.0009281035670629725,ok

@@ -1,0 +1,166 @@
+{
+  "run_id": "pilot_01",
+  "dataset_id": "jan",
+  "stage": "pilot",
+  "data_kind": "real",
+  "status": "complete",
+  "started_at": "2026-11-18T19:10:08.535407+00:00",
+  "config_version": "1",
+  "filter_version": "1",
+  "period": {
+    "start": "2025-01-01T00:00:00",
+    "end": "2025-02-01T00:00:00"
+  },
+  "source_files": [
+    {
+      "path": "/Users/adelin-andreifulop/BigData-Viz/data/raw/yellow_tripdata_2025-01.parquet",
+      "size_bytes": 59158238,
+      "sha256": "9af277e4c0d3f9deb30644da822981e1e7df6af58313170fd3aa8a474485488a"
+    }
+  ],
+  "samples": [
+    {
+      "path": "/Users/adelin-andreifulop/BigData-Viz/data/samples/jan_rate-0.01_seed-42.parquet",
+      "manifest_path": "/Users/adelin-andreifulop/BigData-Viz/data/samples/jan_rate-0.01_seed-42.manifest.json",
+      "manifest_sha256": "d3b00459b49eeb340aaadad313e74d2c6ee8f04179b0bb693cafdd90c4174c90",
+      "metadata": {
+        "config_version": "1",
+        "filter_version": "1",
+        "dataset_id": "jan",
+        "period": {
+          "start": "2025-01-01T00:00:00",
+          "end": "2025-02-01T00:00:00"
+        },
+        "source_files": [
+          {
+            "path": "/Users/adelin-andreifulop/BigData-Viz/data/raw/yellow_tripdata_2025-01.parquet",
+            "sha256": "9af277e4c0d3f9deb30644da822981e1e7df6af58313170fd3aa8a474485488a",
+            "size_bytes": 59158238
+          }
+        ],
+        "method": "bernoulli",
+        "sample_rate": 0.01,
+        "seed": 42,
+        "duckdb_version": "1.5.6",
+        "settings": {
+          "sampling_threads": 1,
+          "memory_limit": "1.8 GiB"
+        },
+        "output_file": "jan_rate-0.01_seed-42.parquet",
+        "row_count": 33686,
+        "output_sha256": "ee42b17dd9f641451d40c36532669a1213c5e0d8baaa20f0f571c7533e3c3926",
+        "build_seconds": 0.09867941700008487
+      }
+    },
+    {
+      "path": "/Users/adelin-andreifulop/BigData-Viz/data/samples/jan_rate-0.1_seed-42.parquet",
+      "manifest_path": "/Users/adelin-andreifulop/BigData-Viz/data/samples/jan_rate-0.1_seed-42.manifest.json",
+      "manifest_sha256": "4184ff6497dc73d5522672d02e053a72900c04ec826b946c489a90bad8108663",
+      "metadata": {
+        "config_version": "1",
+        "filter_version": "1",
+        "dataset_id": "jan",
+        "period": {
+          "start": "2025-01-01T00:00:00",
+          "end": "2025-02-01T00:00:00"
+        },
+        "source_files": [
+          {
+            "path": "/Users/adelin-andreifulop/BigData-Viz/data/raw/yellow_tripdata_2025-01.parquet",
+            "sha256": "9af277e4c0d3f9deb30644da822981e1e7df6af58313170fd3aa8a474485488a",
+            "size_bytes": 59158238
+          }
+        ],
+        "method": "bernoulli",
+        "sample_rate": 0.1,
+        "seed": 42,
+        "duckdb_version": "1.5.6",
+        "settings": {
+          "sampling_threads": 1,
+          "memory_limit": "1.8 GiB"
+        },
+        "output_file": "jan_rate-0.1_seed-42.parquet",
+        "row_count": 338514,
+        "output_sha256": "219ad89789f98acfc5dc893bf89aac57c32db043ad150206d082491289fde044",
+        "build_seconds": 0.10351379200005795
+      }
+    }
+  ],
+  "environment": {
+    "commit": "d14164856e979e12c635ed5d2992e402070c2dad",
+    "working_tree_dirty": true,
+    "python": "3.13.17",
+    "packages": {
+      "duckdb": "1.5.6",
+      "pandas": "3.1.1",
+      "numpy": "2.5.5"
+    },
+    "os": "macOS-27.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "arm",
+    "logical_cpus": 10,
+    "ram_bytes": 17179869184
+  },
+  "code_sha256": {
+    "src/__init__.py": "70cb1665ea8c5c3f81414a9bd7e6ccc2d22c8324e488742ab256afb9188cb353",
+    "src/benchmark.py": "7b068f732623185887305e289bb2d58de7bff8ecf2253d7708dae18a2931de9d",
+    "src/config.py": "c36b426eb91aee08aabf435510a26403ba4447f7689b614b1c615a31843d0a88",
+    "src/data.py": "c9a11c4575b44d73be454c63876caab80099ed62a5a8bb6235f6ab0a927c1355",
+    "src/demo.py": "00c95a53ce767933dc17cabf207239f3acb2fcd88f80cd3a5f788406b8a47c56",
+    "src/metrics.py": "76846b139ce89f72521ad05c4fa0135dc6ddea8110d7eb9aaa85e0d3d78dda43",
+    "src/plots.py": "0f2f1b4680b58c30599e3e23f7a06ebd4c5ec7547d1e987cfeb6a49ce650912a",
+    "src/queries.py": "1588aedcf78218661a94f660bbb3355e5340e86713d36b6ba193e97d388ee905",
+    "src/sampling.py": "453baab3f5fe4807cb8a12b4caf763db5e6b3b2c637a99dc9c63577dc795a714",
+    "src/sampling_core/__init__.py": "113c410f1b8a4980f1f8c6f19ea55b99cb8eac98bc63725a4b0da4e7b753fee5",
+    "src/sampling_core/artifacts.py": "9377e1815e7ed62bc61009c67d47b2b3ed6f6c6ce0896a97fcf21a6a20829d80",
+    "src/sampling_core/cli.py": "6604a3d1a1c5b9dec558613f78201465519bf1239b28933c91856c6e37355796",
+    "src/sampling_core/engine.py": "88b82a90df688ee1e62fda65bff512b7153dd13862f8c2081ec271a13d685d74",
+    "src/sampling_core/estimation.py": "6a0af76d6b0a1988a42624b62c373edd1b705a32fbfd9cfe99b978ce6682dbef",
+    "src/sampling_core/manifests.py": "6193da4a384f1b52e6ffcc30d762a1e541a691cd5bf82ab3613c0a1c550210fb",
+    "src/sql/benchmark_sample_check.sql": "8e4defde203b344f52a8a018833d878f5739359f1c605ccc84a8d7ee56c8c76b",
+    "src/sql/count_parquet_rows.sql": "e26a040d4033d27968610bd5949093b8aac9c003a0ff17f306a727560286d811",
+    "src/sql/distance.sql": "be2d8901e0f9c83bb0f9528c1522c704ea23300197302476676e232eaa085261",
+    "src/sql/export_sample_parquet.sql": "c79c26513b3883e816a0f44a7a3a6b335bdff3d071c54a2405797cfbd9a6aa28",
+    "src/sql/hours.sql": "c3caf6d4aa91fb18bcd186ab54b1bb6cff22ab4f6b1b20fd11fc46052bd6604c",
+    "src/sql/materialize_sample_table.sql": "e69612157907424d384a6c7cb51b1758755e981ebc19377d1b4bdadbe4331941",
+    "src/sql/quality_exclusions.sql": "93fee02061ab5bf9dde3310792c3e3ce101c596ad1a99aa9ce1a384d04b4c199",
+    "src/sql/register_sample_parquet.sql": "12ebd5483ba890611bf37bc14932dcd2b24cbfec88b77264447d8c205c9e71a6",
+    "src/sql/register_trips.sql": "90f6af8ac007e86f9e34c1a3195d719bf776340fb53ea0e9e4d3985224baf1a9"
+  },
+  "settings": {
+    "query_threads": 2,
+    "memory_limit": "2GB",
+    "temp_directory": "/Users/adelin-andreifulop/BigData-Viz/data/tmp"
+  },
+  "protocol": {
+    "questions": [
+      "hours",
+      "distance"
+    ],
+    "sample_rates": [
+      0.01,
+      0.1
+    ],
+    "seeds": [
+      42
+    ],
+    "repeats": 3,
+    "warmups_per_case": 1,
+    "expected_measurements": 18,
+    "timed": "query_counts + fetchall; wall-clock seconds",
+    "excluded": [
+      "input checks",
+      "sample registration",
+      "sample construction",
+      "estimation",
+      "metrics",
+      "file exports"
+    ],
+    "order": "forward on odd repeats; reverse on even repeats",
+    "cache": "warm process; no OS/DuckDB cache reset"
+  },
+  "measured_queries": 18,
+  "result_rows": 87,
+  "error_rows": 4,
+  "finished_at": "2026-11-18T19:10:09.427837+00:00"
+}
