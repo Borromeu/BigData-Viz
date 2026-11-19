@@ -556,7 +556,7 @@ python -m src.benchmark --fixture --run-id fixture_demo_01
 
 Rezultatele se scriu în `results/runs/<run_id>/`. Folosiți un ID nou la fiecare
 rulare. Demonstrația este etichetată `fixture_jan` și nu reprezintă un benchmark
-pe datele reale. Detalii despre protocol, teste și ieșiri: [docs/benchmark.md](docs/benchmark.md).
+pe datele reale. Detalii despre protocol, teste și ieșiri: [docs/reproduce.md](docs/reproduce.md).
 
 ## 15. Demonstrația pilot
 
