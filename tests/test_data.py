@@ -86,7 +86,8 @@ class TestManifestVerification(unittest.TestCase):
 
         with self.assertRaises(FileNotFoundError) as ctx:
             verify_data_manifest(self.manifest_path, [missing_file])
-        self.assertIn("nu există pe disc", str(ctx.exception))
+        self.assertIn(f"nu există pe disc: {missing_file}", str(ctx.exception))
+        self.assertIn("Sursa de descărcare: " + self.manifest_data["files"][-1]["url"], str(ctx.exception))
 
     def test_verify_manifest_unregistered_file(self):
         """Un fișier care nu există în manifest produce ValueError."""

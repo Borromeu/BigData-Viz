@@ -27,30 +27,39 @@ def plot_distance_distribution(exact_df: pd.DataFrame, estimated_df: pd.DataFram
     x = DISTANCE_ORDER
     fig.add_bar(x=x, y=[exact_map.get(k, 0.0) for k in ("0", "1", "2", "3", "4")],
                 name="Exact (100%)", visible=True)
+    empty_rates = set()
     for rate in rates:
         frame = options[rate]
         total = frame["value"].sum()
         values = [float(v / total * 100) if total else 0.0 for v in frame["value"]]
         mapping = dict(zip(frame["group_key"].astype(str), values))
-        empty = status == "empty_sample" or total == 0
+        if total == 0 or (rate == sample_rate and status == "empty_sample"):
+            empty_rates.add(rate)
         fig.add_bar(x=x, y=[mapping.get(k, 0.0) for k in ("0", "1", "2", "3", "4")],
                     name=f"Estimated ({rate:g}%)" if rate > 1 else f"Estimated ({rate * 100:g}%)",
                     visible=(rate == sample_rate),
                     hovertemplate="%{x}<br>%{y:.1f}%<extra></extra>")
+    metadata = f"Analysis period: {analysis_period} | Random sample seed: {random_seed if random_seed is not None else 'unspecified'}"
+
+    def annotations_for(rate):
+        annotations = [dict(text=metadata, x=0, y=-0.24, xref="paper", yref="paper", showarrow=False)]
+        if rate in empty_rates:
+            annotations.append(dict(text="Empty sample: estimated distribution is undefined",
+                                    x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False))
+        return annotations
+
     buttons = []
     for index, rate in enumerate(rates):
         visible = [True] + [i == index for i in range(len(rates))]
         buttons.append(dict(label=f"{rate * 100:g}%", method="update",
-                            args=[{"visible": visible}, {"title": f"Distance distribution — sample {rate * 100:g}%"}]))
-    metadata = f"Analysis period: {analysis_period} | Random sample seed: {random_seed if random_seed is not None else 'unspecified'}"
+                            args=[{"visible": visible},
+                                  {"title": f"Distance distribution — sample {rate * 100:g}%",
+                                   "annotations": annotations_for(rate)}]))
     fig.update_layout(title=f"Distance distribution — sample {sample_rate * 100:g}%",
                       xaxis_title="Distance range", yaxis_title="Share of trips (%)",
                       yaxis=dict(range=[0, 100], ticksuffix="%"), barmode="group",
                       template="plotly_white", meta={"analysis_period": analysis_period, "random_seed": random_seed},
-                      annotations=[dict(text=metadata, x=0, y=-0.24, xref="paper", yref="paper", showarrow=False)],
+                      annotations=annotations_for(sample_rate),
                       updatemenus=[dict(type="dropdown", buttons=buttons, x=1, y=1.15,
-                                        xanchor="right", yanchor="top")])
-    if status == "empty_sample":
-        fig.add_annotation(text="Empty sample: estimated distribution is undefined",
-                           x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+                                        xanchor="right", yanchor="top", active=rates.index(sample_rate))])
     return fig
