@@ -1,4 +1,5 @@
 from html.parser import HTMLParser
+import csv
 from pathlib import Path
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ import unittest
 from plotly.offline import get_plotlyjs
 
 from src.benchmark import prepare_fixture, run_benchmark
+from src.render import _validate_errors, load_pilot_artifacts
 
 
 class ScriptSources(HTMLParser):
@@ -22,6 +24,15 @@ class ScriptSources(HTMLParser):
 
 
 class RenderIntegrationTests(unittest.TestCase):
+    def test_unexpected_error_key_is_rejected(self):
+        errors = [{
+            "method": "sample", "seed": "42", "question": "unexpected",
+            "sample_rate": "0.01", "metric": "stale_metric",
+            "value": "0.0", "status": "ok",
+        }]
+        with self.assertRaisesRegex(ValueError, "Chei neașteptate în errors.csv"):
+            _validate_errors([], errors, (0.01, 0.1), 42)
+
     def test_render_cli_exports_two_self_contained_figures(self):
         run_id = "fixture_render"
         project_root = Path(__file__).resolve().parents[1]
@@ -70,6 +81,23 @@ class RenderIntegrationTests(unittest.TestCase):
                     self.assertIn("10%", figure_html)
                     self.assertIn("Propor\\u021bia curselor (%)", figure_html)
                     if name == "hours.html":
-                        self.assertIn("Eroare pe ore fa\\u021b\\u0103 de exact", figure_html)
+                        metric_label = "Eroare normalizată pe numărul de curse"
+                        self.assertIn(metric_label.encode("unicode_escape").decode("ascii"), figure_html)
                     else:
                         self.assertIn("TVD fa\\u021b\\u0103 de exact", figure_html)
+
+            loaded_rows, loaded_manifest, _ = load_pilot_artifacts(render_dir)
+            self.assertEqual(len(loaded_rows), loaded_manifest["result_rows"])
+            errors_path = render_dir / "errors.csv"
+            with errors_path.open(encoding="utf-8", newline="") as source:
+                reader = csv.DictReader(source)
+                fieldnames = reader.fieldnames
+                errors = list(reader)
+            original = errors[0]["value"]
+            errors[0]["value"] = str(float(original or 0) + 0.123456789)
+            with errors_path.open("w", encoding="utf-8", newline="") as target:
+                writer = csv.DictWriter(target, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(errors)
+            with self.assertRaisesRegex(ValueError, "Valoarea salvată"):
+                load_pilot_artifacts(render_dir)

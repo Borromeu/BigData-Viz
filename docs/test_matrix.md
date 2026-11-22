@@ -1,9 +1,9 @@
 # Matricea testelor O1–O6
 
-Matricea leagă cerințele de implementare de testele automate. Testele graficelor
-pentru pilot folosesc `results/runs/pilot_01/results.csv`, `errors.csv` și
-`run_manifest.json` prin `src.render`. Testele cu fixture-uri sintetice sunt
-identificate separat și nu sunt prezentate ca rezultate reale de pilot.
+Matricea leagă cerințele de implementare de testele automate. Testele de grafice
+și randare folosesc fixture-uri sintetice în memorie și rularea temporară
+`fixture_render`, creată în `tests/test_render.py`; ele nu citesc direct artefactele
+din `results/runs/pilot_01`.
 
 | Obiectiv | Cerință | Implementare | Dovezi prin teste |
 |---|---|---|---|

@@ -45,8 +45,8 @@ class HoursFigureTests(unittest.TestCase):
             self.rows, self.manifest,
             metric_values={0.01: 0.021589327931150537, 0.1: 0.006174668935567683},
         )
-        self.assertIn("Eroare pe ore față de exact: 2.1589%", fig.layout.title.text)
-        self.assertIn("Eroare pe ore față de exact: 0.6175%",
+        self.assertIn("Eroare normalizată pe numărul de curse: 2.1589%", fig.layout.title.text)
+        self.assertIn("Eroare normalizată pe numărul de curse: 0.6175%",
                       fig.layout.updatemenus[0].buttons[1].args[1]["title.text"])
 
     def test_empty_sample_is_labeled_in_initial_view_and_selector(self):

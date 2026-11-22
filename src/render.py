@@ -13,7 +13,15 @@ from src.metrics import evaluate
 from src.plots import plot_distance_distribution
 
 
-def load_pilot_run(run_dir):
+def validate_run_id(run_id):
+    """Validează identificatorul rulării înainte de a forma o cale pe disc."""
+    if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", run_id):
+        raise ValueError("run_id invalid: folosește 1–80 caractere alfanumerice, cratimă sau underscore.")
+    return run_id
+
+
+def load_pilot_artifacts(run_dir):
+    """Încarcă și verifică manifestul, rezultatele și metricile pilotului."""
     run_dir = Path(run_dir)
     with (run_dir / "run_manifest.json").open(encoding="utf-8") as source:
         manifest = json.load(source)
@@ -26,7 +34,16 @@ def load_pilot_run(run_dir):
         raise ValueError("results.csv nu are numărul de rânduri din manifest.")
     if any(row[key] != manifest[key] for row in rows for key in identity):
         raise ValueError("results.csv nu corespunde manifestului rulării.")
-    _read_errors(run_dir, manifest)
+    errors = _read_errors(run_dir, manifest)
+    rates = tuple(float(rate) for rate in manifest["protocol"]["sample_rates"])
+    seed = manifest["protocol"]["seeds"][0]
+    _validate_errors(rows, errors, rates, seed)
+    return rows, manifest, errors
+
+
+def load_pilot_run(run_dir):
+    """Compatibilitate: încarcă un pilot și întoarce rândurile și manifestul."""
+    rows, manifest, _ = load_pilot_artifacts(run_dir)
     return rows, manifest
 
 
@@ -63,6 +80,18 @@ def _validate_errors(rows, errors, rates, seed):
         "hours": "normalized_absolute_error",
         "distance": "total_variation",
     }
+    expected_keys = {
+        (question, rate, metric_name)
+        for rate in rates
+        for question, metric_name in metric_config.items()
+    }
+    unexpected_keys = set(saved) - expected_keys
+    if unexpected_keys:
+        raise ValueError(f"Chei neașteptate în errors.csv: {sorted(unexpected_keys)}")
+    if set(saved) != expected_keys:
+        missing_keys = expected_keys - set(saved)
+        raise ValueError(f"Chei lipsă în errors.csv: {sorted(missing_keys)}")
+
     displayed = {"hours": {}, "distance": {}}
     for rate in rates:
         for question, metric_name in metric_config.items():
@@ -151,8 +180,7 @@ def _calculate_metric_map(rows, question, rates):
 
 
 def render_pilot(run_dir):
-    rows, manifest = load_pilot_run(run_dir)
-    errors = _read_errors(run_dir, manifest)
+    rows, manifest, errors = load_pilot_artifacts(run_dir)
     outputs = []
     for name, figure in build_pilot_figures(rows, manifest, errors).items():
         out = Path(run_dir) / f"{name}.html"
@@ -166,8 +194,10 @@ def main():
     parser.add_argument("--run-id", required=True, help="De exemplu pilot_01")
     parser.add_argument("--runs-dir", type=Path, default=RUNS_DIR)
     args = parser.parse_args()
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", args.run_id):
-        parser.error("--run-id invalid")
+    try:
+        validate_run_id(args.run_id)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     try:
         outputs = render_pilot(args.runs_dir / args.run_id)

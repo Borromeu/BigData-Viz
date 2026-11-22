@@ -62,7 +62,8 @@ def build_hours_figure(rows, manifest, metric_values=None):
     def title(key):
         suffix = " · eșantion gol" if key in empty_samples else ""
         error = (metric_values or {}).get(key[1])
-        error_label = f" | Eroare pe ore față de exact: {error:.4%}" if error is not None else ""
+        error_label = (f" | Eroare normalizată pe numărul de curse: {error:.4%}"
+                       if error is not None else "")
         return f"Curse după ora zilei · eșantion {key[1]:.0%}{suffix}{error_label}<br><sup>{subtitle}</sup>"
 
     fig = go.Figure()

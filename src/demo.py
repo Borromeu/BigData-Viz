@@ -4,10 +4,11 @@ import argparse
 import shutil
 
 from src.config import RESULTS_DIR, RUNS_DIR
-from src.render import render_pilot
+from src.render import render_pilot, validate_run_id
 
 
 def main(run_id="pilot_01"):
+    validate_run_id(run_id)
     run_dir = RUNS_DIR / run_id
     outputs = render_pilot(run_dir)
     distance = next(path for path in outputs if path.name == "distance.html")
