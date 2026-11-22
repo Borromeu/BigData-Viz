@@ -12,7 +12,9 @@ def plot_distance_distribution(exact_df: pd.DataFrame, estimated_df: pd.DataFram
                                sample_rate: float = 1.0, *, status: str = "ok",
                                analysis_period: str = "Unspecified",
                                random_seed: int | None = None,
-                               sample_options: dict | None = None) -> go.Figure:
+                               sample_options: dict | None = None,
+                               metric_values: dict | None = None,
+                               metric_label: str = "TVD față de exact") -> go.Figure:
     if isinstance(sample_rate, bool) or not math.isfinite(sample_rate) or not 0 < sample_rate <= 1:
         raise ValueError("sample_rate must be finite and in (0, 1].")
     options = sample_options or {sample_rate: estimated_df}
@@ -26,7 +28,7 @@ def plot_distance_distribution(exact_df: pd.DataFrame, estimated_df: pd.DataFram
     exact_map = dict(zip(exact_df["group_key"].astype(str), exact_values))
     x = DISTANCE_ORDER
     fig.add_bar(x=x, y=[exact_map.get(k, 0.0) for k in ("0", "1", "2", "3", "4")],
-                name="Exact (100%)", visible=True)
+                name="Exact · 100%", visible=True)
     empty_rates = set()
     for rate in rates:
         frame = options[rate]
@@ -36,15 +38,19 @@ def plot_distance_distribution(exact_df: pd.DataFrame, estimated_df: pd.DataFram
         if total == 0 or (rate == sample_rate and status == "empty_sample"):
             empty_rates.add(rate)
         fig.add_bar(x=x, y=[mapping.get(k, 0.0) for k in ("0", "1", "2", "3", "4")],
-                    name=f"Estimated ({rate:g}%)" if rate > 1 else f"Estimated ({rate * 100:g}%)",
+                    name=f"Estimat ({rate:g}%)" if rate > 1 else f"Estimat ({rate * 100:g}%)",
                     visible=(rate == sample_rate),
                     hovertemplate="%{x}<br>%{y:.1f}%<extra></extra>")
-    metadata = f"Analysis period: {analysis_period} | Random sample seed: {random_seed if random_seed is not None else 'unspecified'}"
+    metadata = f"Perioada analizei: {analysis_period} | Seed eșantion aleator: {random_seed if random_seed is not None else 'nespecificat'}"
 
     def annotations_for(rate):
         annotations = [dict(text=metadata, x=0, y=-0.24, xref="paper", yref="paper", showarrow=False)]
+        metric = (metric_values or {}).get(rate)
+        if metric is not None:
+            annotations.append(dict(text=f"{metric_label}: {metric:.4%}",
+                                    x=0.5, y=1.08, xref="paper", yref="paper", showarrow=False))
         if rate in empty_rates:
-            annotations.append(dict(text="Empty sample: estimated distribution is undefined",
+            annotations.append(dict(text="Eșantion gol: distribuția estimată nu este definită",
                                     x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False))
         return annotations
 
@@ -53,10 +59,10 @@ def plot_distance_distribution(exact_df: pd.DataFrame, estimated_df: pd.DataFram
         visible = [True] + [i == index for i in range(len(rates))]
         buttons.append(dict(label=f"{rate * 100:g}%", method="update",
                             args=[{"visible": visible},
-                                  {"title": f"Distance distribution — sample {rate * 100:g}%",
+                                  {"title": f"Distribuția distanțelor — eșantion {rate * 100:g}%",
                                    "annotations": annotations_for(rate)}]))
-    fig.update_layout(title=f"Distance distribution — sample {sample_rate * 100:g}%",
-                      xaxis_title="Distance range", yaxis_title="Share of trips (%)",
+    fig.update_layout(title=f"Distribuția distanțelor — eșantion {sample_rate * 100:g}%",
+                      xaxis_title="Intervalul distanței", yaxis_title="Proporția curselor (%)",
                       yaxis=dict(range=[0, 100], ticksuffix="%"), barmode="group",
                       template="plotly_white", meta={"analysis_period": analysis_period, "random_seed": random_seed},
                       annotations=annotations_for(sample_rate),

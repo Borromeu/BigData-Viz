@@ -38,7 +38,7 @@ class RenderIntegrationTests(unittest.TestCase):
                     dataset, run_id=run_id, samples_dir=samples_dir,
                     runs_dir=benchmark_root / "runs", source_manifest=source_manifest,
                 )
-                for name in ("results.csv", "run_manifest.json"):
+                for name in ("results.csv", "run_manifest.json", "errors.csv"):
                     shutil.copyfile(run_dir / name, render_dir / name)
 
             result = subprocess.run(
@@ -54,7 +54,7 @@ class RenderIntegrationTests(unittest.TestCase):
 
             bundle = get_plotlyjs()
             for name, expected_label in (("hours.html", "00:00"),
-                                         ("distance.html", "Distance distribution")):
+                                         ("distance.html", "Distribuția distanțelor")):
                 with self.subTest(name=name):
                     html = (render_dir / name).read_text(encoding="utf-8")
                     scripts = ScriptSources()
@@ -64,4 +64,12 @@ class RenderIntegrationTests(unittest.TestCase):
                     _, inline_bundle, figure_html = html.partition(bundle)
                     self.assertTrue(inline_bundle, "Lipsește biblioteca Plotly inclusă în HTML.")
                     self.assertTrue("Plotly.newPlot(" in figure_html, "Lipsește graficul.")
-                    self.assertTrue(expected_label in figure_html, "Graficul nu corespunde exportului.")
+                    expected_html_label = expected_label.encode("unicode_escape").decode("ascii")
+                    self.assertIn(expected_html_label, figure_html, "Graficul nu corespunde exportului.")
+                    self.assertIn("1%", figure_html)
+                    self.assertIn("10%", figure_html)
+                    self.assertIn("Propor\\u021bia curselor (%)", figure_html)
+                    if name == "hours.html":
+                        self.assertIn("Eroare pe ore fa\\u021b\\u0103 de exact", figure_html)
+                    else:
+                        self.assertIn("TVD fa\\u021b\\u0103 de exact", figure_html)
