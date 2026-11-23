@@ -24,7 +24,13 @@ class HoursFigureTests(unittest.TestCase):
     def test_ordered_hours_and_selector_keep_exact_visible(self):
         fig = build_hours_figure(self.rows, self.manifest)
         self.assertEqual(list(fig.data[0].x), [f"{hour:02d}" for hour in range(24)])
-        self.assertEqual(list(fig.data[0].y), list(range(0, 2400, 100)))
+        expected = [hour * 100 / 276 for hour in range(24)]
+        for actual, wanted in zip(fig.data[0].y, expected):
+            self.assertAlmostEqual(actual, wanted)
+        self.assertAlmostEqual(sum(fig.data[0].y), 100.0)
+        self.assertAlmostEqual(sum(fig.data[1].y), 100.0)
+        self.assertEqual(fig.layout.yaxis.range, (0, 100))
+        self.assertEqual(fig.layout.yaxis.ticksuffix, "%")
         self.assertEqual([trace.visible for trace in fig.data], [True, True, False])
         buttons = fig.layout.updatemenus[0].buttons
         self.assertEqual([button.label for button in buttons], ["1%", "10%"])
@@ -33,6 +39,15 @@ class HoursFigureTests(unittest.TestCase):
         self.assertGreater(fig.layout.yaxis.range[1], max(fig.data[1].y))
         self.assertIn("[2025-01-01, 2025-02-01)", fig.layout.title.text)
         self.assertIn("Seed 42", fig.layout.title.text)
+
+    def test_metric_error_is_displayed_and_updates_with_selector(self):
+        fig = build_hours_figure(
+            self.rows, self.manifest,
+            metric_values={0.01: 0.021589327931150537, 0.1: 0.006174668935567683},
+        )
+        self.assertIn("Eroare normalizată pe numărul de curse: 2.1589%", fig.layout.title.text)
+        self.assertIn("Eroare normalizată pe numărul de curse: 0.6175%",
+                      fig.layout.updatemenus[0].buttons[1].args[1]["title.text"])
 
     def test_empty_sample_is_labeled_in_initial_view_and_selector(self):
         for row in self.rows:
@@ -43,7 +58,7 @@ class HoursFigureTests(unittest.TestCase):
         self.assertNotIn("eșantion gol", fig.layout.updatemenus[0].buttons[1].args[1]["title.text"])
 
     def test_missing_hour_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "24 de ore"):
+        with self.assertRaisesRegex(ValueError, "toate cele 24 de ore"):
             build_hours_figure(self.rows[1:], self.manifest)
 
 

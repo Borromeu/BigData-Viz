@@ -25,13 +25,19 @@ class PlotTests(unittest.TestCase):
         self.assertEqual(fig.layout.meta, {"analysis_period": "Jan 2025", "random_seed": 42})
         self.assertEqual(fig.layout.updatemenus[0].buttons[0].label, "33.3333%")
         self.assertIn("miles", DISTANCE_ORDER[-1])
+        self.assertEqual(fig.layout.xaxis.title.text, "Intervalul distanței")
 
     def test_sample_percentage_selector_keeps_axis_scale(self):
         fig = plot_distance_distribution(
             frame([1, 1, 1, 1, 1]), frame([1, 1, 1, 1, 1]), sample_rate=0.1,
             sample_options={0.1: frame([1, 1, 1, 1, 1]), 0.2: frame([1, 2, 3, 4, 5])},
+            metric_values={0.1: 0.0028132811599130073, 0.2: 0.0009281035670629725},
         )
         self.assertEqual(len(fig.layout.updatemenus[0].buttons), 2)
+        first_annotations = fig.layout.updatemenus[0].buttons[0].args[1]["annotations"]
+        second_annotations = fig.layout.updatemenus[0].buttons[1].args[1]["annotations"]
+        self.assertTrue(any("TVD față de exact: 0.2813%" in a["text"] for a in first_annotations))
+        self.assertTrue(any("TVD față de exact: 0.0928%" in a["text"] for a in second_annotations))
         self.assertEqual(fig.layout.yaxis.range, (0, 100))
         self.assertEqual([trace.visible for trace in fig.data], [True, True, False])
 
@@ -40,7 +46,7 @@ class PlotTests(unittest.TestCase):
             frame([1, 2, 3, 3, 3]), frame([0, 0, 0, 0, 0]),
             sample_rate=0.1, status="empty_sample",
         )
-        self.assertTrue(any("Empty sample" in annotation.text for annotation in fig.layout.annotations))
+        self.assertTrue(any("Eșantion gol" in annotation.text for annotation in fig.layout.annotations))
         self.assertEqual(list(fig.data[1].y), [0, 0, 0, 0, 0])
 
     def test_empty_sample_label_follows_selected_rate(self):
@@ -51,8 +57,8 @@ class PlotTests(unittest.TestCase):
             status="empty_sample", sample_options={0.01: empty, 0.10: exact},
         )
         empty_button, nonempty_button = fig.layout.updatemenus[0].buttons
-        self.assertTrue(any("Empty sample" in a["text"] for a in empty_button.args[1]["annotations"]))
-        self.assertFalse(any("Empty sample" in a["text"] for a in nonempty_button.args[1]["annotations"]))
+        self.assertTrue(any("Eșantion gol" in a["text"] for a in empty_button.args[1]["annotations"]))
+        self.assertFalse(any("Eșantion gol" in a["text"] for a in nonempty_button.args[1]["annotations"]))
 
 
 if __name__ == "__main__":

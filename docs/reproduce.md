@@ -100,8 +100,8 @@ pentru eșantioane și 9,7 MB pentru cele două HTML-uri, fără `.venv`.
   executați **Restart Kernel → Run All**. Verificați cele două grafice,
   opțiunile de eșantionare și tabelele cu timpi, erori și costuri de generare.
 - Deschideți `hours.html` și `distance.html` fără internet. Pentru o rulare
-  completă, `src.render` regenerează HTML-urile din `results.csv` și
-  `run_manifest.json`. Notebookul mai citește `timings.csv` și `errors.csv`.
+  completă, `src.render` regenerează HTML-urile din `results.csv`,
+  `errors.csv` și `run_manifest.json`. Notebookul mai citește `timings.csv`.
 
 Păstrați `pilot_01` ca referință pentru prezentare și stocați separat rularea
 de verificare. Consemnați în [`platform_checks.md`](platform_checks.md) sistemul,

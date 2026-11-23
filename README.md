@@ -574,7 +574,7 @@ python -m src.render --run-id pilot_01
 ```
 
 Deschideți `hours.html` și `distance.html` din `results/runs/pilot_01/` în browser.
-Exportul folosește `results.csv` și `run_manifest.json` din directorul rulării.
+Exportul folosește `results.csv`, `errors.csv` și `run_manifest.json` din directorul rulării.
 
 ## 16. Documentație oficială
 
