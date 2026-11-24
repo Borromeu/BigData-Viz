@@ -144,3 +144,67 @@ Dacă oricare dintre aceste condiții este încălcată, reutilizarea este refuz
    * Pentru evaluarea comparativă de benchmark (A8/A9):
      - **Regulă comună**: Toate măsurătorile comparative principale se execută pe un singur laptop, folosind eșantioanele salvate local.
      - Dacă se dorește transferul pe un al doilea sistem, se copiază direct fișierele `.parquet` și `.manifest.json`, verificându-se hash-ul SHA-256.
+
+---
+
+## 6. Verificarea S6 pe Windows — 24 noiembrie 2026
+
+### Mediul de testare
+
+- Sistem: Windows x64
+- Python: 3.13.2
+- DuckDB: 1.5.6
+- Commit de bază: `5da65b6`
+- Dataset: NYC Yellow Taxi, ianuarie 2025
+- Populație eligibilă: 3.384.311 rânduri
+- Metodă: Bernoulli (`random()` + `setseed()`)
+- Threads: 1
+- Seed: 42
+
+Dependențele au fost instalate folosind
+`requirements-windows-x64-py313.lock`.
+Verificarea `pip check` a trecut, iar suita completă
+de teste a raportat 82/82 teste trecute.
+
+Versiunea Python utilizată este 3.13.2, diferită de
+versiunea 3.13.17 recomandată în documentația proiectului.
+
+### Generarea independentă a eșantioanelor
+
+Au fost efectuate două generări separate, folosind aceeași
+populație, aceleași probabilități și același seed.
+
+| Rată | Rânduri A | Rânduri B | Timp A | Timp B |
+|---|---:|---:|---:|---:|
+| 1% | 33.686 | 33.686 | 0,316 s | 0,390 s |
+| 10% | 338.514 | 338.514 | 0,338 s | 0,385 s |
+
+Directoarele utilizate:
+
+- `data/samples/s6_run_a/`
+- `data/samples/s6_run_b/`
+
+### Compararea conținutului
+
+Comparația a fost realizată în DuckDB prin `EXCEPT ALL`
+în ambele direcții, pentru a păstra multiplicitatea
+rândurilor duplicate.
+
+| Rată | A minus B | B minus A | Conținut identic |
+|---|---:|---:|---|
+| 1% | 0 | 0 | Da |
+| 10% | 0 | 0 | Da |
+
+### Concluzie
+
+Reproductibilitatea a fost confirmată pentru ambele rate,
+în mediul Windows testat. Cele două generări independente
+au produs același multiset de rânduri pentru fiecare
+probabilitate și seed.
+
+Timpii de construire diferă între execuții, dar această
+variație nu afectează conținutul eșantioanelor.
+
+Verificarea demonstrează reproductibilitatea în mediul
+testat, nu identitatea rezultatelor între sisteme de operare,
+arhitecturi sau versiuni diferite de DuckDB.
