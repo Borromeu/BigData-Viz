@@ -1,3 +1,4 @@
+
 # Reproductibilitatea eșantionării și limitele metodei
 
 **Responsabil**: Ștefan (Taskul S6)  
@@ -15,15 +16,19 @@ SELECT *
 FROM trips
 WHERE random() < getvariable('sampling_probability')
 ```
+
 Implementarea folosește DuckDB 1.5.6 și realizează eșantionarea Bernoulli prin evaluarea condiției random() < p pentru fiecare rând. Probabilitatea p este transmisă printr-o variabilă DuckDB, iar generatorul aleator este inițializat înaintea fiecărei eșantionări prin setseed(). Seed-ul întreg este normalizat folosind formula seed / 4294967295.0. Pentru reproductibilitate, eșantionarea se execută cu threads = 1.
 
 ### De ce este obligatoriu `threads = 1`?
+
 Documentația oficială DuckDB precizează explicit:
+
 > *„A fixed random seed does not guarantee deterministic results when queries are executed on multiple threads.”*
 
 Când DuckDB rulează cu mai multe thread-uri, scanarea tabelelor și partiționarea datelor între nuclee depind de planificatorul sistemului de operare. Aceasta duce la asignarea neuniformă a blocurilor de date către generatoarele pseudo-aleatoare, alterând ordinea și componența finală a rândurilor selectate, chiar dacă seed-ul este identic.
 
 Prin urmare, biblioteca noastră implementează următorul mecanism în `src/sampling_core/engine.py` și `artifacts.py`:
+
 1. Salvează setarea curentă a conexiunii (`previous_threads = get_threads(con)`).
 2. Forțează `SET threads = 1` pe durata scanării și scrierii eșantionului.
 3. Într-un bloc `finally`, restaurează setarea inițială (`previous_threads`), asigurând că interogările ulterioare de benchmark nu sunt încetinite artificial.
@@ -33,6 +38,7 @@ Prin urmare, biblioteca noastră implementează următorul mecanism în `src/sam
 ## 2. Proprietățile eșantionării și variația numărului de rânduri
 
 ### $p$ este o probabilitate de includere, nu o cotă fixă
+
 În eșantionarea Bernoulli, fiecare rând eligibil din populația `trips` este inclus independent cu probabilitatea $p$. Dimensiunea finală $n$ a eșantionului este o variabilă aleatoare binomială:
 
 $$n \sim \text{Binomial}(N, p)$$
@@ -40,7 +46,6 @@ $$n \sim \text{Binomial}(N, p)$$
 * Valoarea așteptată: $\mathbb{E}[n] = N \cdot p$
 * Varianța: $\text{Var}(n) = N \cdot p \cdot (1 - p)$
 * Deviația standard: $\sigma = \sqrt{N \cdot p \cdot (1 - p)}$
-
 
 ### Exemplu concret pe datasetul NYC Yellow Taxi (ianuarie 2025):
 
@@ -99,19 +104,24 @@ aceleași setări și aceeași versiune DuckDB. Rezultatele nu
 sunt garantate identice între versiuni sau implementări
 diferite ale eșantionării.
 
+---
 
 ## 3. Comportamentul categoriilor rare și eșantioanelor goale
 
 ### Riscul pierderii grupurilor slab populate
+
 Pentru categorii cu puține înregistrări (de exemplu, ore de noapte cu trafic redus sau zone de preluare periferice cu volum $N_k$ mic):
+
 * Probabilitatea ca niciun rând din grupa $k$ să nu fie selectat este:
 
 $$P(\text{categorie absentă}) = (1 - p)^{N_k}$$
 
 Pentru o zonă cu $N_k = 50$ curse și o rată de $1\%$:
+
 $$P(\text{absentă}) = (1 - 0.01)^{50} \approx 60.5\%$$
 
 ### Tratarea în proiect:
+
 1. **Completare cu zero (`zero-fill`)**: Categoriile absente din eșantion sunt completate cu valoarea `0.0` la numărători, conform cerințelor din `queries.py` și `estimation.py`.
 2. **Statut explicit `empty_sample`**: Dacă întregul eșantion nu conține date pentru o interogare, statusul devine `empty_sample`. Nu se inventează proporții uniforme sau erori zero.
 3. **Păstrarea seed-ului fix**: Nu schimbăm seed-ul doar pentru că un anumit rezultat arată mai favorabil vizual; integritatea științifică impune raportarea variației naturale.
@@ -123,7 +133,9 @@ $$P(\text{absentă}) = (1 - 0.01)^{50} \approx 60.5\%$$
 Fiecare eșantion generat este însoțit de un fișier manifest JSON (`<nume>.manifest.json`).
 
 ### Criterii de reutilizare (`check_sample_reuse`):
+
 Un eșantion este reutilizat (`reused = True`) doar dacă toate elementele următoare coincid exact:
+
 1. **Hash-ul surselor**: SHA-256 al fiecărui fișier Parquet brut de intrare.
 2. **Versiunea filtrelor**: `FILTER_VERSION` (modificarea regulilor invalidează automat cache-ul).
 3. **Versiunea configurației**: `CONFIG_VERSION`.
@@ -163,44 +175,210 @@ Dacă oricare dintre aceste condiții este încălcată, reutilizarea este refuz
 
 Dependențele au fost instalate folosind
 `requirements-windows-x64-py313.lock`.
+
 Verificarea `pip check` a trecut, iar suita completă
 de teste a raportat 82/82 teste trecute.
 
 Versiunea Python utilizată este 3.13.2, diferită de
 versiunea 3.13.17 recomandată în documentația proiectului.
 
-### Generarea independentă a eșantioanelor
+### Comenzile exacte de verificare
 
-Au fost efectuate două generări separate, folosind aceeași
-populație, aceleași probabilități și același seed.
+Comenzile au fost executate în PowerShell, din directorul
+`D:\Desktop\BigData-Viz-S6`, pe branch-ul `stefan-s6-verificare`,
+pornit din commitul `5da65b6`.
+
+**1. Crearea mediului virtual și instalarea dependențelor**
+
+```powershell
+py -3.13 -m venv .venv
+
+.\.venv\Scripts\python.exe -m pip install --require-hashes --only-binary=:all: -r requirements-windows-x64-py313.lock
+```
+
+**2. Verificarea dependențelor și a versiunilor**
+
+```powershell
+.\.venv\Scripts\python.exe -m pip check
+
+.\.venv\Scripts\python.exe -c "import sys, duckdb; print('Python:', sys.version.split()[0]); print('DuckDB:', duckdb.__version__)"
+```
+
+Rezultatele observate:
+
+```text
+No broken requirements found.
+Python: 3.13.2
+DuckDB: 1.5.6
+```
+
+**3. Rularea suitei complete de teste**
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -q
+```
+
+Rezultatul observat:
+
+```text
+----------------------------------------------------------------------
+Ran 82 tests in 9.841s
+
+OK
+```
+
+**4. Prima generare independentă: `s6_run_a`**
+
+```powershell
+.\.venv\Scripts\python.exe -m src.sampling --stage pilot --dataset jan --raw-dir "..\BigData-Viz\data\raw" --samples-dir "data\samples\s6_run_a"
+```
+
+Rezultatul observat:
+
+```text
+[Sampling CLI] Stage: pilot | Dataset: jan
+  - rate=0.01 seed=42 rows=33686 (built in 0.316s) -> data\samples\s6_run_a\jan_rate-0.01_seed-42.parquet
+  - rate=0.1 seed=42 rows=338514 (built in 0.338s) -> data\samples\s6_run_a\jan_rate-0.1_seed-42.parquet
+```
+
+**5. A doua generare independentă: `s6_run_b`**
+
+```powershell
+.\.venv\Scripts\python.exe -m src.sampling --stage pilot --dataset jan --raw-dir "..\BigData-Viz\data\raw" --samples-dir "data\samples\s6_run_b"
+```
+
+Rezultatul observat:
+
+```text
+[Sampling CLI] Stage: pilot | Dataset: jan
+  - rate=0.01 seed=42 rows=33686 (built in 0.390s) -> data\samples\s6_run_b\jan_rate-0.01_seed-42.parquet
+  - rate=0.1 seed=42 rows=338514 (built in 0.385s) -> data\samples\s6_run_b\jan_rate-0.1_seed-42.parquet
+```
+
+**Notă privind căile locale:** `--raw-dir` indică directorul cu
+datele brute din checkout-ul local `BigData-Viz`, aflat lângă
+`BigData-Viz-S6`. Pe alt calculator, această cale trebuie adaptată
+la locația fișierului `yellow_tripdata_2025-01.parquet`.
+
+### Confirmarea generării fără reutilizare
+
+Cele două comenzi de sampling au utilizat directoare
+de ieșire separate:
+
+- `data/samples/s6_run_a/`
+- `data/samples/s6_run_b/`
+
+Pentru ambele probabilități și ambele execuții,
+CLI-ul a raportat explicit **`built in`**, nu `reused`.
+
+Acest lucru confirmă că fiecare dintre cele patru
+artefacte Parquet a fost construit în execuția
+respectivă, fără reutilizarea unui eșantion
+existent prin mecanismul de cache.
+
+Nu a fost necesar flag-ul `--overwrite`, deoarece
+au fost folosite directoare noi pentru verificarea S6.
+
+Astfel, comparația dintre A și B reprezintă
+două generări independente, nu citirea aceluiași
+artefact salvat anterior.
+
+### Rezultatele generării
+
+Au fost efectuate două generări separate, folosind
+aceeași populație, aceleași probabilități și același seed.
 
 | Rată | Rânduri A | Rânduri B | Timp A | Timp B |
 |---|---:|---:|---:|---:|
 | 1% | 33.686 | 33.686 | 0,316 s | 0,390 s |
 | 10% | 338.514 | 338.514 | 0,338 s | 0,385 s |
 
-Directoarele utilizate:
+Timpii reprezintă duratele de construire afișate
+de CLI și nu includ neapărat toate operațiile
+auxiliare ale procesului.
 
-- `data/samples/s6_run_a/`
-- `data/samples/s6_run_b/`
+### Compararea conținutului complet
 
-### Compararea conținutului
+Pentru a verifica reproductibilitatea, nu este suficientă
+egalitatea numărului de rânduri.
 
-Comparația a fost realizată în DuckDB prin `EXCEPT ALL`
-în ambele direcții, pentru a păstra multiplicitatea
-rândurilor duplicate.
+Două eșantioane pot avea aceeași dimensiune, dar
+pot conține curse diferite.
+
+Prin urmare, comparația a fost realizată în DuckDB
+prin `EXCEPT ALL` în ambele direcții, pentru a păstra
+inclusiv multiplicitatea rândurilor duplicate.
+
+**Scriptul PowerShell/Python executat pentru verificare:**
+
+```powershell
+$script = @'
+from pathlib import Path
+import duckdb
+
+con = duckdb.connect()
+
+for rate in ("0.01", "0.1"):
+    filename = f"jan_rate-{rate}_seed-42.parquet"
+
+    a = str((Path("data/samples/s6_run_a") / filename).resolve())
+    b = str((Path("data/samples/s6_run_b") / filename).resolve())
+
+    sql = """
+        SELECT COUNT(*)
+        FROM (
+            SELECT * FROM read_parquet(?)
+            EXCEPT ALL
+            SELECT * FROM read_parquet(?)
+        ) AS differences
+    """
+
+    a_minus_b = con.execute(sql, [a, b]).fetchone()[0]
+    b_minus_a = con.execute(sql, [b, a]).fetchone()[0]
+
+    print(f"\nEsantion {float(rate) * 100:g}% - seed 42")
+    print("Randuri doar in A:", a_minus_b)
+    print("Randuri doar in B:", b_minus_a)
+    print("Continut identic:", a_minus_b == 0 and b_minus_a == 0)
+
+con.close()
+'@
+
+$script | & ".\.venv\Scripts\python.exe" -
+```
+
+**Rezultatele observate:**
+
+```text
+Esantion 1% - seed 42
+Randuri doar in A: 0
+Randuri doar in B: 0
+Continut identic: True
+
+Esantion 10% - seed 42
+Randuri doar in A: 0
+Randuri doar in B: 0
+Continut identic: True
+```
+
+Rezumatul comparației:
 
 | Rată | A minus B | B minus A | Conținut identic |
 |---|---:|---:|---|
 | 1% | 0 | 0 | Da |
 | 10% | 0 | 0 | Da |
 
+Au fost verificate ambele direcții ale diferenței
+de multisete, astfel încât să fie detectate inclusiv
+diferențele de multiplicitate ale rândurilor duplicate.
+
 ### Concluzie
 
 Reproductibilitatea a fost confirmată pentru ambele rate,
-în mediul Windows testat. Cele două generări independente
-au produs același multiset de rânduri pentru fiecare
-probabilitate și seed.
+în mediul Windows testat.
+
+Cele două generări independente au produs același
+multiset de rânduri pentru fiecare probabilitate și seed.
 
 Timpii de construire diferă între execuții, dar această
 variație nu afectează conținutul eșantioanelor.
